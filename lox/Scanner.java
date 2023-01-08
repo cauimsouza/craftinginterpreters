@@ -56,7 +56,7 @@ class Scanner {
   private void scanToken() {
      char c = source.charAt(current); 
      switch (c) {
-        case '(': addToken(TokenType.LEFT_PAREN); break;
+        case '(':  addToken(TokenType.LEFT_PAREN); break;
         case ')':  addToken(TokenType.RIGHT_PAREN); break;
         case '{':  addToken(TokenType.LEFT_BRACE); break;
         case '}':  addToken(TokenType.RIGHT_BRACE); break;
@@ -66,6 +66,8 @@ class Scanner {
         case '+':  addToken(TokenType.PLUS); break;
         case ';':  addToken(TokenType.SEMICOLON); break;
         case '*':  addToken(TokenType.STAR); break;
+        case '?':  addToken(TokenType.QUESTION); break;
+        case ':':  addToken(TokenType.COLON); break;
         case '/':
             if (nextIs('/')) { // It's a one-line comment.
                 current++;
@@ -207,7 +209,20 @@ class Scanner {
         
         String s = source.substring(start, current + 1);
         TokenType type = keywords.getOrDefault(s, TokenType.IDENTIFIER);
-        addToken(type);
+        
+        switch (s) {
+            case "false":
+                addToken(type, false);
+                break;
+            case "true":
+                addToken(type, true);
+                break;
+            case "nil":
+                addToken(type, null);
+                break;
+            default:
+                addToken(type);
+        }
   }
   
   // Returns true if there is a next character and the next character is c.

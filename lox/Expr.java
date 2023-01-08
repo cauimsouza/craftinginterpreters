@@ -2,12 +2,28 @@ import java.util.List;
 
 abstract class Expr {
   interface Visitor<R> {
+    R visitUnaryExpr(Unary expr);
     R visitBinaryExpr(Binary expr);
+    R visitTernaryExpr(Ternary expr);
     R visitGroupingExpr(Grouping expr);
     R visitLiteralExpr(Literal expr);
-    R visitUnaryExpr(Unary expr);
   }
   
+  static class Unary extends Expr {
+    Unary(Token operator, Expr right) {
+      this.operator = operator;
+      this.right = right;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitUnaryExpr(this);
+    }
+
+    final Token operator;
+    final Expr right;
+  }
+
   static class Binary extends Expr {
     Binary(Expr left, Token operator, Expr right) {
       this.left = left;
@@ -24,6 +40,26 @@ abstract class Expr {
     final Token operator;
     final Expr right;
   }
+  
+  static class Ternary extends Expr {
+    Ternary(Token operator, Expr left, Expr mid, Expr right) {
+      this.operator = operator;
+      this.left = left;
+      this.mid = mid;
+      this.right = right;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitTernaryExpr(this);
+    }
+
+    final Token operator;
+    final Expr left;
+    final Expr mid;
+    final Expr right;
+  }
+  
   static class Grouping extends Expr {
     Grouping(Expr expression) {
       this.expression = expression;
@@ -36,6 +72,7 @@ abstract class Expr {
 
     final Expr expression;
   }
+  
   static class Literal extends Expr {
     Literal(Object value) {
       this.value = value;
@@ -48,20 +85,6 @@ abstract class Expr {
 
     final Object value;
   }
-  static class Unary extends Expr {
-    Unary(Token operator, Expr right) {
-      this.operator = operator;
-      this.right = right;
-    }
-
-    @Override
-    <R> R accept(Visitor<R> visitor) {
-      return visitor.visitUnaryExpr(this);
-    }
-
-    final Token operator;
-    final Expr right;
-  }
-
+  
   abstract <R> R accept(Visitor<R> visitor);
 }

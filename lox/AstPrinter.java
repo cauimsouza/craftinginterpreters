@@ -4,8 +4,18 @@ public class AstPrinter implements Expr.Visitor<String> {
    }
    
    @Override
+   public String visitUnaryExpr(Expr.Unary expr) {
+       return String.format("(%s %s)", expr.operator, expr.right.accept(this));
+   } 
+   
+   @Override
    public String visitBinaryExpr(Expr.Binary expr) {
        return String.format("(%s %s %s)", expr.operator, expr.left.accept(this), expr.right.accept(this));
+   } 
+   
+   @Override
+   public String visitTernaryExpr(Expr.Ternary expr) {
+       return String.format("(%s %s %s %s)", expr.operator, expr.left.accept(this), expr.mid.accept(this), expr.right.accept(this));
    } 
    
    @Override
@@ -16,11 +26,6 @@ public class AstPrinter implements Expr.Visitor<String> {
    @Override
    public String visitLiteralExpr(Expr.Literal expr) {
        return String.format("%s", expr.value);
-   } 
-   
-   @Override
-   public String visitUnaryExpr(Expr.Unary expr) {
-       return String.format("(%s %s)", expr.operator, expr.right.accept(this));
    } 
    
     public static void main(String[] args) {
