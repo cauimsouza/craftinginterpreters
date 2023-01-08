@@ -100,9 +100,27 @@ class Parser {
   
   private Expr unary() {
      ArrayList<Token> ops = new ArrayList<>();
-     while (match(TokenType.MINUS, TokenType.BANG)) {
-          Token t = previous();
-          ops.add(t);
+     
+     boolean readOp = true;
+     while (readOp) {
+         readOp = false;
+         switch (peek().type) {
+            case PLUS:
+            case STAR:
+            case SLASH:
+            case BANG_EQUAL:
+            case EQUAL_EQUAL:
+            case GREATER_EQUAL:
+            case GREATER:
+            case LESS_EQUAL:
+            case LESS:
+              error(peek(), "Unary '" + peek().lexeme + "' expressions are not supported.");
+            case MINUS:
+            case BANG:
+                ops.add(advance());
+                readOp = true;
+                break;
+         }
      }
      
      Expr expr = primary();
