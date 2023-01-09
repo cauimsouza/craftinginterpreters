@@ -128,10 +128,10 @@ class Scanner {
             break;
 
         case '"':
-            int index = source.indexOf(c, current + 1);
+            int index = source.indexOf('"', current + 1);
             if (index >= 0) {
                 current = index;
-                String s = source.substring(start, index + 1);
+                String s = source.substring(start + 1, index); // Drop the enclosing double quotes from the lexeme.
                 addToken(TokenType.STRING, s);
                 for (int i = 0; i < s.length(); i++) { if (s.charAt(i) == '\n') line++; } 
             } else {
