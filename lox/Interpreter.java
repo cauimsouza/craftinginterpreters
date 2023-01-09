@@ -56,8 +56,19 @@ public class Interpreter implements Expr.Visitor<Object> {
                 checkNumbersOperand(expr.operator, left, right);
                 return (double) left / (double) right;
             case STAR:
-                checkNumbersOperand(expr.operator, left, right);
-                return (double) left * (double) right;
+                if (left instanceof Double && right instanceof Double)
+                    return (double) left * (double) right;
+                if (left instanceof Double && right instanceof String) {
+                    // Multiplication of double d by string s returns the concatenation of floor(d) copies of s.
+                    try {
+                        int n = ((Double) left).intValue();
+                        if (n < 0) throw new RuntimeError(expr.operator, "Expression multiplying string must evaluate to a non-negative value.");
+                        return new String(new char[n]).replace("\0", (String) right);  
+                    } catch (OutOfMemoryError e) {
+                        throw new RuntimeError(expr.operator, "Resulting string does not fit in memory.");
+                    }
+                }
+                throw new RuntimeError(expr.operator, "Both operands must be numbers, or the left must be a non-negative number and the right a string.");
             case GREATER:
                 checkNumbersOperand(expr.operator, left, right);
                 return (double) left > (double) right;
