@@ -72,17 +72,29 @@ public class Interpreter implements Expr.Visitor<Object> {
                 }
                 throw new RuntimeError(expr.operator, "Both operands must be numbers, or the left must be a non-negative number and the right a string.");
             case GREATER:
-                checkNumbersOperand(expr.operator, left, right);
-                return (double) left > (double) right;
+                if (left instanceof Double && right instanceof Double)
+                    return (double) left > (double) right;
+                if (left instanceof String && right instanceof String)
+                    return ((String) left).compareTo((String) right) > 0;
+                throw new RuntimeError(expr.operator, "Operands must be both numbers or both strings.");
             case GREATER_EQUAL:
-                checkNumbersOperand(expr.operator, left, right);
-                return (double) left >= (double) right;
+                if (left instanceof Double && right instanceof Double)
+                    return (double) left >= (double) right;
+                if (left instanceof String && right instanceof String)
+                    return ((String) left).compareTo((String) right) >= 0;
+                throw new RuntimeError(expr.operator, "Operands must be both numbers or both strings.");
             case LESS:
-                checkNumbersOperand(expr.operator, left, right);
-                return (double) left < (double) right;
+                if (left instanceof Double && right instanceof Double)
+                    return (double) left < (double) right;
+                if (left instanceof String && right instanceof String)
+                    return ((String) left).compareTo((String) right) < 0;
+                throw new RuntimeError(expr.operator, "Operands must be both numbers or both strings.");
             case LESS_EQUAL:
-                checkNumbersOperand(expr.operator, left, right);
-                return (double) left <= (double) right;
+                if (left instanceof Double && right instanceof Double)
+                    return (double) left <= (double) right;
+                if (left instanceof String && right instanceof String)
+                    return ((String) left).compareTo((String) right) <= 0;
+                throw new RuntimeError(expr.operator, "Operands must be both numbers or both strings.");
             case EQUAL_EQUAL:
                 return isEqual(left, right);
             case BANG_EQUAL:
