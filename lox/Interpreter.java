@@ -1,12 +1,54 @@
-public class Interpreter implements Expr.Visitor<Object> {
-   void eval(Expr expr) {
-       try {
-            Object obj = expr.accept(this);
-            System.out.println(stringify(obj));
-       } catch (RuntimeError e) {
-            Lox.runtimeError(e);   
-       }
-   }
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+
+public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
+    private Map<String, Object> ids = new HashMap<>();
+    
+    public void interpret(List<Stmt> program) {
+        try {
+            for (Stmt s : program) {
+                s.accept(this);
+            }
+        } catch (RuntimeError e) {
+            Lox.runtimeError(e);
+        }
+    }
+    
+    @Override
+    public Void visitExprStmt(Stmt.ExprStmt stmt) {
+        eval(stmt.expr);
+        return null;
+    }
+    
+    @Override
+    public Void visitPrintStmt(Stmt.PrintStmt stmt) {
+        System.out.println(stringify(eval(stmt.expr)));
+        return null;
+    }
+    
+    @Override
+    public Void visitVarDeclStmt(Stmt.VarDeclStmt stmt) {
+        Object val = null;
+        if (stmt.expr != null) val = eval(stmt.expr);
+        ids.put(stmt.id.lexeme, val);
+        return null;
+    }
+    
+    @Override
+    public Void visitAssignStmt(Stmt.AssignStmt stmt) {
+        Token v = stmt.id;
+        if (ids.containsKey(v.lexeme)) {
+            ids.put(v.lexeme, eval(stmt.expr));
+            return null;
+        }
+        
+        throw new RuntimeError(v, "Undefined variable '" + v.lexeme + "'.");
+    }
+    
+    private Object eval(Expr expr) {
+        return expr.accept(this);
+    }
    
     private String stringify(Object object) {
         if (object == null) return "nil";
@@ -125,6 +167,15 @@ public class Interpreter implements Expr.Visitor<Object> {
    @Override
    public Object visitLiteralExpr(Expr.Literal expr) {
       return expr.value; 
+   } 
+   
+   @Override
+   public Object visitVariableExpr(Expr.Variable expr) {
+        Token name = expr.name;
+        if (ids.containsKey(name.lexeme))
+            return ids.get(name.lexeme);
+    
+        throw new RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
    } 
    
     public static void main(String[] args) {

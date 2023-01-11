@@ -12,12 +12,66 @@ class Parser {
     this.tokens = tokens;
   }
   
-  Expr parse() {
+  List<Stmt> parse() {
       try {
-          return expression();
+          List<Stmt> stmts = new ArrayList<>();
+          
+          while (!isAtEnd()) {
+             Stmt s = declaration(); 
+             stmts.add(s);
+          }
+          return stmts;
       } catch (ParseError e) {
           return null;
       }
+  }
+  
+    private Stmt declaration() {
+        if (match(TokenType.VAR)) return varDeclStmt();
+        
+        return statement();
+    }
+  
+    private Stmt varDeclStmt() {
+        consume(TokenType.IDENTIFIER, "Expect identifier.");
+        Token t = previous();
+        
+        Expr expr = null;
+        if (match(TokenType.EQUAL)) expr = expression();
+        
+        consume(TokenType.SEMICOLON, "Expect semicolon.");
+        return new Stmt.VarDeclStmt(t, expr);
+    }
+  
+    private Stmt statement() {
+        if (match(TokenType.PRINT)) return printStmt();
+        
+        // If the next token doesn't look like any known kind of statement,
+        // we assume it's an expression.
+        Expr expr = expression();
+        if (match(TokenType.EQUAL)) {
+            Expr value = expression();
+            consume(TokenType.SEMICOLON, "Expect semicolon.");
+            if (expr instanceof Expr.Variable) {
+                return new Stmt.AssignStmt(((Expr.Variable) expr).name, value);
+            }
+            throw error(previous(), "Invalid assignment target.");
+        }
+        
+        consume(TokenType.SEMICOLON, "Expect semicolon.");
+        return new Stmt.ExprStmt(expr);
+    }
+  
+  private Stmt printStmt() {
+      Expr expr = expression();
+      consume(TokenType.SEMICOLON, "Expect semicolon.");
+      return new Stmt.PrintStmt(expr);
+  }
+  
+  private Stmt exprStmt() {
+      Expr expr = expression();
+      consume(TokenType.SEMICOLON, "Expect semicolon.");
+      return new Stmt.ExprStmt(expr);
   }
   
   private Expr expression() {
@@ -133,9 +187,12 @@ class Parser {
   }
   
   private Expr primary() {
-      if (match(TokenType.NUMBER, TokenType.STRING, TokenType.FALSE, TokenType.TRUE, TokenType.NIL)) {
+      if (match(TokenType.NUMBER, TokenType.STRING,
+                TokenType.FALSE, TokenType.TRUE,
+                TokenType.NIL)) {
           return new Expr.Literal(previous().literal);
       }
+      if (match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
       
       if (match(TokenType.LEFT_PAREN)) {
           Expr expr = expression();

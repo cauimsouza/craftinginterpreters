@@ -55,16 +55,12 @@ public class Lox {
     
     System.out.println("Parsing...");
     Parser parser = new Parser(tokens);
-    Expr expr = parser.parse();
+    List<Stmt> prog = parser.parse();
     if (hadError) return;
     
-    System.out.println("Printing AST...");
-    AstPrinter printer = new AstPrinter();
-    System.out.println(printer.print(expr));
-    
-    System.out.println("Evaluating AST...");
+    System.out.println("Interpreting...");
     Interpreter interpreter = new Interpreter();
-    interpreter.eval(expr);
+    interpreter.interpret(prog);
   }
   
   static void error(int line, String message) {
