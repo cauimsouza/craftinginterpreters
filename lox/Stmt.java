@@ -1,9 +1,12 @@
+import java.util.List;
+
 abstract class Stmt {
     interface Visitor<R> {
         R visitExprStmt(ExprStmt stmt);
         R visitPrintStmt(PrintStmt stmt);
         R visitVarDeclStmt(VarDeclStmt stmt);
         R visitAssignStmt(AssignStmt stmt);
+        R visitBlockStmt(BlockStmt stmt);
     }
       
     abstract <R> R accept(Visitor<R> visitor);
@@ -61,6 +64,19 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitAssignStmt(this);
+        }
+    }
+    
+    static class BlockStmt extends Stmt {
+        final List<Stmt> stmts;
+        
+        BlockStmt(List<Stmt> stmts) {
+            this.stmts = stmts;
+        }
+        
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+          return visitor.visitBlockStmt(this);
         }
     }
 }

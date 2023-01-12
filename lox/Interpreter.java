@@ -3,7 +3,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
-    private Map<String, Object> ids = new HashMap<>();
+    private Environment env = new Environment();
     
     public void interpret(List<Stmt> program) {
         try {
@@ -31,19 +31,29 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     public Void visitVarDeclStmt(Stmt.VarDeclStmt stmt) {
         Object val = null;
         if (stmt.expr != null) val = eval(stmt.expr);
-        ids.put(stmt.id.lexeme, val);
+        env.declare(stmt.id, val);
         return null;
     }
     
     @Override
     public Void visitAssignStmt(Stmt.AssignStmt stmt) {
-        Token v = stmt.id;
-        if (ids.containsKey(v.lexeme)) {
-            ids.put(v.lexeme, eval(stmt.expr));
-            return null;
+        env.assign(stmt.id, eval(stmt.expr));
+        return null;
+    }
+    
+    @Override
+    public Void visitBlockStmt(Stmt.BlockStmt stmt) {
+        Environment previous = env;
+        try {
+            env = new Environment(env);
+            
+            for (Stmt s : stmt.stmts) {
+                s.accept(this);     
+            }
+        } finally {
+            env = previous;
         }
-        
-        throw new RuntimeError(v, "Undefined variable '" + v.lexeme + "'.");
+        return null;
     }
     
     private Object eval(Expr expr) {
@@ -171,11 +181,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    
    @Override
    public Object visitVariableExpr(Expr.Variable expr) {
-        Token name = expr.name;
-        if (ids.containsKey(name.lexeme))
-            return ids.get(name.lexeme);
-    
-        throw new RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
+       return env.get(expr.name);
    } 
    
     public static void main(String[] args) {

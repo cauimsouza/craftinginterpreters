@@ -28,6 +28,7 @@ class Parser {
   
     private Stmt declaration() {
         if (match(TokenType.VAR)) return varDeclStmt();
+        if (match(TokenType.LEFT_BRACE)) return blockStmt();
         
         return statement();
     }
@@ -41,6 +42,15 @@ class Parser {
         
         consume(TokenType.SEMICOLON, "Expect semicolon.");
         return new Stmt.VarDeclStmt(t, expr);
+    }
+    
+    private Stmt blockStmt() {
+        List<Stmt> stmts = new ArrayList<>();
+        while (!isAtEnd() && peek().type != TokenType.RIGHT_BRACE) {
+            stmts.add(declaration());
+        }
+        consume(TokenType.RIGHT_BRACE, "Expect right brace.");
+        return new Stmt.BlockStmt(stmts);
     }
   
     private Stmt statement() {
