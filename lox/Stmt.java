@@ -41,6 +41,11 @@ abstract class Stmt {
         final Token id;
         final Expr expr;
         
+        VarDeclStmt(Token id) {
+           this.id = id;
+           this.expr = null;
+        }
+        
         VarDeclStmt(Token id, Expr expr) {
             this.id = id;
             this.expr = expr;

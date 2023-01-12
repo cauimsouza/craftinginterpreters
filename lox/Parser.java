@@ -37,11 +37,14 @@ class Parser {
         consume(TokenType.IDENTIFIER, "Expect identifier.");
         Token t = previous();
         
-        Expr expr = null;
-        if (match(TokenType.EQUAL)) expr = expression();
+        if (match(TokenType.EQUAL)) {
+            Expr expr = expression();
+            consume(TokenType.SEMICOLON, "Expect semicolon.");
+            return new Stmt.VarDeclStmt(t, expr);
+        }
         
         consume(TokenType.SEMICOLON, "Expect semicolon.");
-        return new Stmt.VarDeclStmt(t, expr);
+        return new Stmt.VarDeclStmt(t);
     }
     
     private Stmt blockStmt() {

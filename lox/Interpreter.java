@@ -29,9 +29,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     
     @Override
     public Void visitVarDeclStmt(Stmt.VarDeclStmt stmt) {
-        Object val = null;
-        if (stmt.expr != null) val = eval(stmt.expr);
-        env.declare(stmt.id, val);
+        if (stmt.expr == null) env.declare(stmt.id);
+        else env.declare(stmt.id, eval(stmt.expr));
         return null;
     }
     
