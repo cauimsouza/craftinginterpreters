@@ -55,6 +55,13 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         return null;
     }
     
+    @Override
+    public Void visitIfStmt(Stmt.IfStmt stmt) {
+        if (isTruthy(stmt.expr.accept(this))) stmt.ifStmt.accept(this);
+        else if (stmt.elseStmt != null) stmt.elseStmt.accept(this);
+        return null;
+    }
+    
     private Object eval(Expr expr) {
         return expr.accept(this);
     }

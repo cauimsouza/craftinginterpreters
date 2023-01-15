@@ -28,7 +28,6 @@ class Parser {
   
     private Stmt declaration() {
         if (match(TokenType.VAR)) return varDeclStmt();
-        if (match(TokenType.LEFT_BRACE)) return blockStmt();
         
         return statement();
     }
@@ -47,17 +46,10 @@ class Parser {
         return new Stmt.VarDeclStmt(t);
     }
     
-    private Stmt blockStmt() {
-        List<Stmt> stmts = new ArrayList<>();
-        while (!isAtEnd() && peek().type != TokenType.RIGHT_BRACE) {
-            stmts.add(declaration());
-        }
-        consume(TokenType.RIGHT_BRACE, "Expect right brace.");
-        return new Stmt.BlockStmt(stmts);
-    }
-  
     private Stmt statement() {
         if (match(TokenType.PRINT)) return printStmt();
+        if (match(TokenType.LEFT_BRACE)) return blockStmt();
+        if (match(TokenType.IF)) return ifStmt();
         
         // If the next token doesn't look like any known kind of statement,
         // we assume it's an expression.
@@ -75,10 +67,32 @@ class Parser {
         return new Stmt.ExprStmt(expr);
     }
   
-  private Stmt printStmt() {
+    private Stmt printStmt() {
+        Expr expr = expression();
+        consume(TokenType.SEMICOLON, "Expect semicolon.");
+        return new Stmt.PrintStmt(expr);
+    }
+  
+    private Stmt blockStmt() {
+        List<Stmt> stmts = new ArrayList<>();
+        while (!isAtEnd() && peek().type != TokenType.RIGHT_BRACE) {
+            stmts.add(declaration());
+        }
+        consume(TokenType.RIGHT_BRACE, "Expect right brace.");
+        return new Stmt.BlockStmt(stmts);
+    }
+  
+  
+  private Stmt ifStmt() {
+      consume(TokenType.LEFT_PAREN, "Expect left parenthesis.");
       Expr expr = expression();
-      consume(TokenType.SEMICOLON, "Expect semicolon.");
-      return new Stmt.PrintStmt(expr);
+      consume(TokenType.RIGHT_PAREN, "Expect right parenthesis.");
+      Stmt ifStmt = statement();
+      
+      Stmt elseStmt = null;
+      if (match(TokenType.ELSE)) elseStmt = statement(); 
+      
+      return new Stmt.IfStmt(expr, ifStmt, elseStmt);
   }
   
   private Stmt exprStmt() {

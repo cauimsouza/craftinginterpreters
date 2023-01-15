@@ -7,6 +7,7 @@ abstract class Stmt {
         R visitVarDeclStmt(VarDeclStmt stmt);
         R visitAssignStmt(AssignStmt stmt);
         R visitBlockStmt(BlockStmt stmt);
+        R visitIfStmt(IfStmt stmt);
     }
       
     abstract <R> R accept(Visitor<R> visitor);
@@ -82,6 +83,23 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitBlockStmt(this);
+        }
+    }
+    
+    static class IfStmt extends Stmt {
+        final Expr expr;
+        final Stmt ifStmt;
+        final Stmt elseStmt;
+        
+        IfStmt(Expr expr, Stmt ifStmt, Stmt elseStmt) {
+            this.expr = expr;
+            this.ifStmt = ifStmt;
+            this.elseStmt = elseStmt;
+        }
+        
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+          return visitor.visitIfStmt(this);
         }
     }
 }
