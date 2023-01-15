@@ -5,9 +5,9 @@ abstract class Stmt {
         R visitExprStmt(ExprStmt stmt);
         R visitPrintStmt(PrintStmt stmt);
         R visitVarDeclStmt(VarDeclStmt stmt);
-        R visitAssignStmt(AssignStmt stmt);
         R visitBlockStmt(BlockStmt stmt);
         R visitIfStmt(IfStmt stmt);
+        R visitWhileStmt(WhileStmt stmt);
     }
       
     abstract <R> R accept(Visitor<R> visitor);
@@ -58,21 +58,6 @@ abstract class Stmt {
         }
     }
     
-    static class AssignStmt extends Stmt {
-        final Token id;
-        final Expr expr;
-        
-        AssignStmt(Token id, Expr expr) {
-            this.id = id;
-            this.expr = expr;
-        }
-        
-        @Override
-        <R> R accept(Visitor<R> visitor) {
-          return visitor.visitAssignStmt(this);
-        }
-    }
-    
     static class BlockStmt extends Stmt {
         final List<Stmt> stmts;
         
@@ -100,6 +85,21 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitIfStmt(this);
+        }
+    }
+    
+    static class WhileStmt extends Stmt {
+        final Expr expr;
+        final Stmt stmt;
+        
+        WhileStmt(Expr expr, Stmt stmt) {
+            this.expr = expr;
+            this.stmt = stmt;
+        }
+        
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+          return visitor.visitWhileStmt(this);
         }
     }
 }

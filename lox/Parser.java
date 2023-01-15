@@ -50,19 +50,11 @@ class Parser {
         if (match(TokenType.PRINT)) return printStmt();
         if (match(TokenType.LEFT_BRACE)) return blockStmt();
         if (match(TokenType.IF)) return ifStmt();
+        if (match(TokenType.WHILE)) return whileStmt();
         
         // If the next token doesn't look like any known kind of statement,
         // we assume it's an expression.
         Expr expr = expression();
-        if (match(TokenType.EQUAL)) {
-            Expr value = expression();
-            consume(TokenType.SEMICOLON, "Expect semicolon.");
-            if (expr instanceof Expr.Variable) {
-                return new Stmt.AssignStmt(((Expr.Variable) expr).name, value);
-            }
-            throw error(previous(), "Invalid assignment target.");
-        }
-        
         consume(TokenType.SEMICOLON, "Expect semicolon.");
         return new Stmt.ExprStmt(expr);
     }
@@ -95,6 +87,15 @@ class Parser {
       return new Stmt.IfStmt(expr, ifStmt, elseStmt);
   }
   
+  private Stmt whileStmt() {
+      consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
+      Expr expr = expression();
+      consume(TokenType.RIGHT_PAREN, "Expect ')' after while condition.");
+      Stmt stmt = statement();
+      
+      return new Stmt.WhileStmt(expr, stmt);
+  }
+  
   private Stmt exprStmt() {
       Expr expr = expression();
       consume(TokenType.SEMICOLON, "Expect semicolon.");
@@ -106,15 +107,30 @@ class Parser {
   }
   
   private Expr sequence() {
-     Expr left = ternary();
+     Expr left = assignment();
      
      while (match(TokenType.COMMA)) {
          Token t = previous();
-         Expr right = ternary();
+         Expr right = assignment();
          left = new Expr.Binary(left, t, right);
      }
      
      return left;
+  }
+  
+  private Expr assignment() {
+      Expr expr = ternary();
+      
+      if (match(TokenType.EQUAL)) {
+          Token t = previous();
+          Expr right = assignment();
+          if (expr instanceof Expr.Variable) {
+            return new Expr.Assign(((Expr.Variable) expr).name, right);
+          }
+          throw error(t, "Invalid assignment target.");
+      }
+      
+      return expr;
   }
   
   private Expr ternary() {

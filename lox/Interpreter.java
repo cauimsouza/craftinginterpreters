@@ -35,12 +35,6 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     }
     
     @Override
-    public Void visitAssignStmt(Stmt.AssignStmt stmt) {
-        env.assign(stmt.id, eval(stmt.expr));
-        return null;
-    }
-    
-    @Override
     public Void visitBlockStmt(Stmt.BlockStmt stmt) {
         Environment previous = env;
         try {
@@ -59,6 +53,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     public Void visitIfStmt(Stmt.IfStmt stmt) {
         if (isTruthy(stmt.expr.accept(this))) stmt.ifStmt.accept(this);
         else if (stmt.elseStmt != null) stmt.elseStmt.accept(this);
+        return null;
+    }
+    
+    @Override
+    public Void visitWhileStmt(Stmt.WhileStmt stmt) {
+        while (isTruthy(stmt.expr.accept(this))) stmt.stmt.accept(this);
         return null;
     }
     
@@ -212,6 +212,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
             new Expr.Literal(45.67)));
     
         System.out.println(new AstPrinter().print(expression));
+    }
+    
+    @Override
+    public Object visitAssignExpr(Expr.Assign expr) {
+        env.assign(expr.name, eval(expr.expr));
+        return null;
     }
     
     private boolean isEqual(Object left, Object right) {
