@@ -51,6 +51,8 @@ class Parser {
         if (match(TokenType.LEFT_BRACE)) return blockStmt();
         if (match(TokenType.IF)) return ifStmt();
         if (match(TokenType.WHILE)) return whileStmt();
+        if (match(TokenType.FOR)) return forStmt();
+        if (match(TokenType.BREAK)) return breakStmt();
         
         // If the next token doesn't look like any known kind of statement,
         // we assume it's an expression.
@@ -87,14 +89,60 @@ class Parser {
       return new Stmt.IfStmt(expr, ifStmt, elseStmt);
   }
   
-  private Stmt whileStmt() {
-      consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
-      Expr expr = expression();
-      consume(TokenType.RIGHT_PAREN, "Expect ')' after while condition.");
-      Stmt stmt = statement();
-      
-      return new Stmt.WhileStmt(expr, stmt);
-  }
+    private Stmt whileStmt() {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
+        Expr expr = expression();
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after while condition.");
+        Stmt stmt = statement();
+        
+        return new Stmt.WhileStmt(expr, stmt);
+    }
+  
+    private Stmt forStmt() {
+        // "for" "(" (varDecl | exprStmt | ";") expression? ";" expression? ")" statement
+        consume(TokenType.LEFT_PAREN, "Expect '(' after for.");
+        Token t = previous();
+        
+        Stmt initialiser = null;
+        if (!match(TokenType.SEMICOLON)) {
+            initialiser = declaration();
+            if (!(initialiser instanceof Stmt.VarDeclStmt) && !(initialiser instanceof Stmt.ExprStmt)) {
+                throw error(t, "Expect var declaration or expression or semicolon after '('.");
+            }
+        }
+        
+        Expr condition = null;
+        if (!match(TokenType.SEMICOLON)) {
+            condition = expression();
+            consume(TokenType.SEMICOLON, "Expect ';' after for condition.");
+        }
+        
+        Expr increment = null;
+        if (!match(TokenType.RIGHT_PAREN)) {
+            increment = expression();
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after for increment.");
+        }
+        
+        Stmt body = statement();
+        
+        List<Stmt> stmts = new ArrayList<>(); 
+        if (initialiser != null) stmts.add(initialiser);
+        if (increment != null) {
+            List<Stmt> whileBody = new ArrayList<>();
+            whileBody.add(body);
+            whileBody.add(new Stmt.ExprStmt(increment));
+            body = new Stmt.BlockStmt(whileBody);
+        }
+        if (condition == null) condition = new Expr.Literal(true);
+        stmts.add(new Stmt.WhileStmt(condition, body));
+        return new Stmt.BlockStmt(stmts);
+    }
+    
+    private Stmt breakStmt() {
+        Token t = previous();
+        consume(TokenType.SEMICOLON, "Expect semicolon after 'break'.");
+        return new Stmt.BreakStmt(t);
+    }
   
   private Stmt exprStmt() {
       Expr expr = expression();

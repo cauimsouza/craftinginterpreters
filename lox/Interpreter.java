@@ -12,6 +12,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
             }
         } catch (RuntimeError e) {
             Lox.runtimeError(e);
+        } catch (Break b) {
+            Lox.runtimeError(new RuntimeError(b.token, "'break' outside any enclosing loop."));
         }
     }
     
@@ -58,8 +60,15 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     
     @Override
     public Void visitWhileStmt(Stmt.WhileStmt stmt) {
-        while (isTruthy(stmt.expr.accept(this))) stmt.stmt.accept(this);
+        try {
+            while (isTruthy(stmt.expr.accept(this))) stmt.stmt.accept(this);
+        } catch (Break b) { }
         return null;
+    }
+    
+    @Override
+    public Void visitBreakStmt(Stmt.BreakStmt stmt) {
+        throw new Break(stmt.token);
     }
     
     private Object eval(Expr expr) {
@@ -241,5 +250,11 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    private void checkNumbersOperand(Token operator, Object left, Object right) {
        checkNumberOperand(operator, left);
        checkNumberOperand(operator, right);
+   }
+   
+   // Used only for support to break statements.
+   private static class Break extends RuntimeException { 
+       final Token token;
+       Break(Token token) { this.token = token; }
    }
 }

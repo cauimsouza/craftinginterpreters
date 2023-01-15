@@ -8,6 +8,7 @@ abstract class Stmt {
         R visitBlockStmt(BlockStmt stmt);
         R visitIfStmt(IfStmt stmt);
         R visitWhileStmt(WhileStmt stmt);
+        R visitBreakStmt(BreakStmt stmt);
     }
       
     abstract <R> R accept(Visitor<R> visitor);
@@ -100,6 +101,21 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitWhileStmt(this);
+        }
+    }
+    
+    static class BreakStmt extends Stmt {
+        // It's a syntactical error to have a 'break' appear outside of any enclosing loop.
+        // We use the token to tell the user where the 'break' appears.
+        final Token token;
+        
+        BreakStmt(Token token) {
+            this.token = token;
+        }
+        
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+          return visitor.visitBreakStmt(this);
         }
     }
 }
