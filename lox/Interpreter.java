@@ -216,8 +216,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     
     @Override
     public Object visitAssignExpr(Expr.Assign expr) {
-        env.assign(expr.name, eval(expr.expr));
-        return null;
+        Object v = eval(expr.expr);
+        env.assign(expr.name, v);
+        return v;
     }
     
     private boolean isEqual(Object left, Object right) {
