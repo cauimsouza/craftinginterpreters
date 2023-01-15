@@ -98,6 +98,18 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    @Override
    public Object visitBinaryExpr(Expr.Binary expr) {
        Object left = expr.left.accept(this);
+       
+       // AND and OR can short-circuit the evaluation of expressions, so
+       // they need to be handled differently.
+       if (expr.operator.type == TokenType.AND) {
+            if (!isTruthy(left))    return false;
+            return isTruthy(expr.right.accept(this));
+       }
+       if (expr.operator.type == TokenType.OR) {
+            if (isTruthy(left))    return true;
+            return isTruthy(expr.right.accept(this));
+       }
+       
        Object right = expr.right.accept(this);
        
        switch (expr.operator.type) {

@@ -84,9 +84,9 @@ class Parser {
   
   
   private Stmt ifStmt() {
-      consume(TokenType.LEFT_PAREN, "Expect left parenthesis.");
+      consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
       Expr expr = expression();
-      consume(TokenType.RIGHT_PAREN, "Expect right parenthesis.");
+      consume(TokenType.RIGHT_PAREN, "Expect ')' after if condition.");
       Stmt ifStmt = statement();
       
       Stmt elseStmt = null;
@@ -118,16 +118,40 @@ class Parser {
   }
   
   private Expr ternary() {
-      Expr left = equality();
+      Expr left = or();
       
       if (match(TokenType.QUESTION)) {
           Token t = previous();
-          Expr mid = ternary();
+          Expr mid = or();
           consume(TokenType.COLON, "Expect ':' after expression.");
-          Expr right = ternary();
+          Expr right = or();
           
           left = new Expr.Ternary(t, left, mid, right);
       }
+      return left;
+  }
+  
+  private Expr or() {
+      Expr left = and();
+      
+      while (match(TokenType.OR)) {
+          Token t = previous();
+          Expr right = and();
+          left = new Expr.Binary(left, t, right);
+      }
+      
+      return left;
+  }
+  
+  private Expr and() {
+      Expr left = equality();
+      
+      while (match(TokenType.AND)) {
+          Token t = previous();
+          Expr right = equality();
+          left = new Expr.Binary(left, t, right);
+      }
+      
       return left;
   }
   
