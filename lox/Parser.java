@@ -28,7 +28,10 @@ class Parser {
   
     private Stmt declaration() {
         if (match(TokenType.VAR)) return varDeclStmt();
-        if (match(TokenType.FUN)) return funDeclStmt();
+        if (peek().type == TokenType.FUN && next().type == TokenType.IDENTIFIER) {
+            match(TokenType.FUN);
+            return funDeclStmt();
+        }
         
         return statement();
     }
@@ -378,22 +381,39 @@ class Parser {
         return args;
     }
   
-  private Expr primary() {
-      if (match(TokenType.NUMBER, TokenType.STRING,
+    private Expr primary() {
+        if (match(TokenType.NUMBER, TokenType.STRING,
                 TokenType.FALSE, TokenType.TRUE,
                 TokenType.NIL)) {
-          return new Expr.Literal(previous().literal);
-      }
-      if (match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
-      
-      if (match(TokenType.LEFT_PAREN)) {
-          Expr expr = expression();
-          consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
-          return new Expr.Grouping(expr);
-      }
-      
-      throw error(peek(), "Expect expression.");
+            return new Expr.Literal(previous().literal);
+        }
+        
+        if (match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
+        
+        if (match(TokenType.LEFT_PAREN)) {
+            Expr expr = expression();
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
+            return new Expr.Grouping(expr);
+        }
+        
+        if (match(TokenType.FUN)) return lambdaExpr();
+        
+        throw error(peek(), "Expect expression.");
     }
+    
+    private Expr lambdaExpr() {
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'fun'.");
+        
+        List<Token> pars = parameters();
+        
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after parameter list.");
+        
+        consume(TokenType.LEFT_BRACE, "Expect '{' after parameter list.");
+        Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
+        
+        return new Expr.Lambda(pars, body);
+    }
+    
   
   private void consume(TokenType type, String message) {
      if (match(type)) return; 
@@ -457,5 +477,9 @@ class Parser {
   
   private Token previous() {
       return tokens.get(current - 1);
+  }
+  
+  private Token next() {
+      return tokens.get(current + 1);
   }
 }
