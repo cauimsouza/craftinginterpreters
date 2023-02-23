@@ -75,6 +75,11 @@ class Parser {
             }
             
             consume(TokenType.IDENTIFIER, "Expect identifier.");
+            for (Token t : pars) {
+                if (t.lexeme.equals(previous().lexeme)) {
+                    error(previous(), "Can't have multiple parameters with the same name.");
+                }
+            }
             pars.add(previous());
             
             if (peek().type == TokenType.RIGHT_PAREN) break;
