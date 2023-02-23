@@ -1,9 +1,30 @@
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
-    private Environment env = new Environment();
+    // globals tracks the outermost scope.
+    final Environment globals = new Environment();
+    
+    // env tracks the "current" scope. It changes as we enter and exip local
+    // scopes.
+    private Environment env = globals;
+    
+    Interpreter() {
+        globals.declare("clock", new LoxCallable() {
+            @Override
+            public int arity() { return 0; }
+            
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                return (double) System.currentTimeMillis() / 1000.0; 
+            }
+            
+            @Override
+            public String toString() { return "<native fn>"; }
+        });
+    }
     
     public void interpret(List<Stmt> program) {
         try {
@@ -37,18 +58,27 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     }
     
     @Override
+    public Void visitFunDeclStmt(Stmt.FunDeclStmt stmt) {
+        env.declare(stmt.name, new LoxFunction(stmt, env));
+        return null;
+    }
+    
+    @Override
     public Void visitBlockStmt(Stmt.BlockStmt stmt) {
-        Environment previous = env;
+        executeBlock(stmt, new Environment(env));
+        return null;
+    }
+    
+    void executeBlock(Stmt.BlockStmt stmt, Environment env) {
+        Environment previous = this.env;
         try {
-            env = new Environment(env);
-            
+            this.env = env;
             for (Stmt s : stmt.stmts) {
                 s.accept(this);     
             }
         } finally {
-            env = previous;
+            this.env = previous;
         }
-        return null;
     }
     
     @Override
@@ -69,6 +99,13 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     @Override
     public Void visitBreakStmt(Stmt.BreakStmt stmt) {
         throw new Break(stmt.token);
+    }
+    
+    @Override
+    public Void visitReturnStmt(Stmt.ReturnStmt stmt) {
+        Object returnVal = null;
+        if (stmt.expr != null) returnVal = eval(stmt.expr);
+        throw new Return(returnVal);
     }
     
     private Object eval(Expr expr) {
@@ -199,7 +236,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    @Override
    public Object visitGroupingExpr(Expr.Grouping expr) {
        return expr.expression.accept(this);
-   } 
+   }
    
    @Override
    public Object visitLiteralExpr(Expr.Literal expr) {
@@ -230,6 +267,23 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         return v;
     }
     
+    @Override
+    public Object visitCallExpr(Expr.Call expr) {
+        Object callee = eval(expr.expr);
+        if (!(callee instanceof LoxCallable))
+            throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+        LoxCallable function = (LoxCallable) callee;
+            
+        if (function.arity() != expr.arguments.size())
+            throw new RuntimeError(expr.paren, "Wrong number of arguments.");
+        
+        List<Object> args = new ArrayList<>();
+        for (Expr arg : expr.arguments) {
+            args.add(eval(arg));
+        }
+        return function.call(this, args);
+    }
+    
     private boolean isEqual(Object left, Object right) {
        if (left == null && right == null) return true;
        if (left == null) return false;
@@ -254,7 +308,11 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    
    // Used only for support to break statements.
    private static class Break extends RuntimeException { 
-       final Token token;
-       Break(Token token) { this.token = token; }
+    final Token token;
+    
+    Break(Token token) {
+        super(null, null, false, false);
+        this.token = token;
+    }
    }
 }

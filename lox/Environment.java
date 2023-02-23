@@ -24,6 +24,15 @@ public class Environment {
         this.env = env;
     }
     
+    public Environment copy() {
+        Environment newEnv;
+        if (env == null) newEnv = new Environment();
+        else newEnv = new Environment(env.copy());
+        newEnv.variables = new HashMap<>(variables);
+        
+        return newEnv;
+    }
+    
     // Declares a new variable without assigning it to a value.
     public void declare(Token name) {
         variables.put(name.lexeme, null);
@@ -32,6 +41,11 @@ public class Environment {
     // Declares a new variable and assigns it to a value.
     public void declare(Token name, Object value) {
         variables.put(name.lexeme, new Value(value));
+    }
+    
+    // Declares a new variable and assigns it to a value.
+    public void declare(String name, Object value) {
+        variables.put(name, new Value(value));
     }
     
     public void assign(Token name, Object value) {

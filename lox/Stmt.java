@@ -5,10 +5,12 @@ abstract class Stmt {
         R visitExprStmt(ExprStmt stmt);
         R visitPrintStmt(PrintStmt stmt);
         R visitVarDeclStmt(VarDeclStmt stmt);
+        R visitFunDeclStmt(FunDeclStmt stmt);
         R visitBlockStmt(BlockStmt stmt);
         R visitIfStmt(IfStmt stmt);
         R visitWhileStmt(WhileStmt stmt);
         R visitBreakStmt(BreakStmt stmt);
+        R visitReturnStmt(ReturnStmt stmt);
     }
       
     abstract <R> R accept(Visitor<R> visitor);
@@ -56,6 +58,23 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitVarDeclStmt(this);
+        }
+    }
+    
+    static class FunDeclStmt extends Stmt {
+        final Token name;
+        final List<Token> parameters;
+        final Stmt.BlockStmt body;
+        
+        FunDeclStmt(Token name, List<Token> parameters, Stmt.BlockStmt body) {
+           this.name = name;
+           this.parameters = parameters;
+           this.body = body;
+        }
+        
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+          return visitor.visitFunDeclStmt(this);
         }
     }
     
@@ -116,6 +135,19 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitBreakStmt(this);
+        }
+    }
+    
+    static class ReturnStmt extends Stmt {
+        final Expr expr;
+        
+        ReturnStmt(Expr expr) {
+            this.expr = expr;
+        }
+        
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+          return visitor.visitReturnStmt(this);
         }
     }
 }

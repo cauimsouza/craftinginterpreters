@@ -28,6 +28,7 @@ class Parser {
   
     private Stmt declaration() {
         if (match(TokenType.VAR)) return varDeclStmt();
+        if (match(TokenType.FUN)) return funDeclStmt();
         
         return statement();
     }
@@ -46,6 +47,42 @@ class Parser {
         return new Stmt.VarDeclStmt(t);
     }
     
+    private Stmt funDeclStmt() {
+        consume(TokenType.IDENTIFIER, "Expect identifier.");
+        Token funName = previous();
+        
+        consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
+        
+        List<Token> pars = parameters();
+        
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after parameter list.");
+        
+        consume(TokenType.LEFT_BRACE, "Expect '{' after parameter list.");
+        Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
+        
+        return new Stmt.FunDeclStmt(funName, pars, body);
+    }
+    
+    // parameters doesn't consume the closing parenthesis ')'.
+    private List<Token> parameters() {
+        List<Token> pars = new ArrayList<>();
+        
+        if (peek().type == TokenType.RIGHT_PAREN) return pars;
+        
+        while (true) {
+            if (pars.size() >= 255) {
+                error(peek(), "Can't have more than 255 parameters.");
+            }
+            
+            consume(TokenType.IDENTIFIER, "Expect identifier.");
+            pars.add(previous());
+            
+            if (peek().type == TokenType.RIGHT_PAREN) break;
+            consume(TokenType.COMMA, "Expect ',' or ')' after parameter.");
+        } 
+        return pars;
+    }
+    
     private Stmt statement() {
         if (match(TokenType.PRINT)) return printStmt();
         if (match(TokenType.LEFT_BRACE)) return blockStmt();
@@ -53,6 +90,7 @@ class Parser {
         if (match(TokenType.WHILE)) return whileStmt();
         if (match(TokenType.FOR)) return forStmt();
         if (match(TokenType.BREAK)) return breakStmt();
+        if (match(TokenType.RETURN)) return returnStmt();
         
         // If the next token doesn't look like any known kind of statement,
         // we assume it's an expression.
@@ -99,7 +137,6 @@ class Parser {
     }
   
     private Stmt forStmt() {
-        // "for" "(" (varDecl | exprStmt | ";") expression? ";" expression? ")" statement
         consume(TokenType.LEFT_PAREN, "Expect '(' after for.");
         Token t = previous();
         
@@ -142,6 +179,15 @@ class Parser {
         Token t = previous();
         consume(TokenType.SEMICOLON, "Expect semicolon after 'break'.");
         return new Stmt.BreakStmt(t);
+    }
+    
+    private Stmt returnStmt() {
+        Expr expr = null;
+        if (peek().type != TokenType.SEMICOLON) {
+            expr = expression();
+        }
+        consume(TokenType.SEMICOLON, "Expect semicolon after return expression.");
+        return new Stmt.ReturnStmt(expr);
     }
   
   private Stmt exprStmt() {
@@ -292,7 +338,7 @@ class Parser {
          }
      }
      
-     Expr expr = primary();
+     Expr expr = call();
      
      for (int i = ops.size() - 1; i >= 0; i--) {
          expr = new Expr.Unary(ops.get(i), expr);
@@ -300,6 +346,39 @@ class Parser {
      
      return expr;
   }
+  
+    private Expr call() {
+        // primary -> primary (arguments?)*
+        // arguments -> assignment ("," assignment)* It can be any expression with higher precedence than sequence
+        Expr expr = primary();
+        
+        while (match(TokenType.LEFT_PAREN)) {
+            Token paren = previous();
+            List<Expr> args = arguments(); 
+            consume (TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+            expr = new Expr.Call(expr, paren, args);
+        }
+        return expr;
+    }
+    
+    private List<Expr> arguments() {
+        // arguments -> assignment ("," assignment)* It can be any expression with higher precedence than sequence
+        List<Expr> args = new ArrayList<Expr>();
+        
+        if (peek().type == TokenType.RIGHT_PAREN) return args;
+        
+        while (true) {
+            if (args.size() >= 255) {
+                error(peek(), "Cant' have more than 255 arguments.");
+            }
+            Expr arg = assignment();
+            args.add(arg);
+            
+            if (peek().type == TokenType.RIGHT_PAREN) break;
+            consume(TokenType.COMMA, "Expect ',' after argument.");
+        }
+        return args;
+    }
   
   private Expr primary() {
       if (match(TokenType.NUMBER, TokenType.STRING,
