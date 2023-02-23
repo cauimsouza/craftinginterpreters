@@ -89,7 +89,6 @@ class Parser {
     }
     
     private Stmt statement() {
-        if (match(TokenType.PRINT)) return printStmt();
         if (match(TokenType.LEFT_BRACE)) return blockStmt();
         if (match(TokenType.IF)) return ifStmt();
         if (match(TokenType.WHILE)) return whileStmt();
@@ -102,12 +101,6 @@ class Parser {
         Expr expr = expression();
         consume(TokenType.SEMICOLON, "Expect semicolon.");
         return new Stmt.ExprStmt(expr);
-    }
-  
-    private Stmt printStmt() {
-        Expr expr = expression();
-        consume(TokenType.SEMICOLON, "Expect semicolon.");
-        return new Stmt.PrintStmt(expr);
     }
   
     private Stmt blockStmt() {
@@ -424,7 +417,6 @@ class Parser {
               case FUN:
               case FOR:
               case IF:
-              case PRINT:
               case RETURN:
               case VAR:
               case WHILE:

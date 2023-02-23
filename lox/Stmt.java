@@ -3,7 +3,6 @@ import java.util.List;
 abstract class Stmt {
     interface Visitor<R> {
         R visitExprStmt(ExprStmt stmt);
-        R visitPrintStmt(PrintStmt stmt);
         R visitVarDeclStmt(VarDeclStmt stmt);
         R visitFunDeclStmt(FunDeclStmt stmt);
         R visitBlockStmt(BlockStmt stmt);
@@ -25,19 +24,6 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitExprStmt(this);
-        }
-    }
-    
-    static class PrintStmt extends Stmt {
-        final Expr expr;
-        
-        PrintStmt(Expr expr) {
-            this.expr = expr;
-        }
-        
-        @Override
-        <R> R accept(Visitor<R> visitor) {
-          return visitor.visitPrintStmt(this);
         }
     }
     

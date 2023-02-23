@@ -24,6 +24,19 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
             @Override
             public String toString() { return "<native fn>"; }
         });
+        globals.declare("print", new LoxCallable() {
+            @Override
+            public int arity() { return 1; }
+            
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                System.out.println(stringify(arguments.get(0)));
+                return null;
+            }
+            
+            @Override
+            public String toString() { return "<native fn>"; }
+        });
     }
     
     public void interpret(List<Stmt> program) {
@@ -41,12 +54,6 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     @Override
     public Void visitExprStmt(Stmt.ExprStmt stmt) {
         eval(stmt.expr);
-        return null;
-    }
-    
-    @Override
-    public Void visitPrintStmt(Stmt.PrintStmt stmt) {
-        System.out.println(stringify(eval(stmt.expr)));
         return null;
     }
     
