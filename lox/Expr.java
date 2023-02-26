@@ -14,9 +14,9 @@ abstract class Expr {
   }
   
   static class Unary extends Expr {
-    Unary(Token operator, Expr right) {
+    Unary(Token operator, Expr expr) {
       this.operator = operator;
-      this.right = right;
+      this.expr = expr;
     }
 
     @Override
@@ -25,7 +25,7 @@ abstract class Expr {
     }
 
     final Token operator;
-    final Expr right;
+    final Expr expr;
   }
 
   static class Binary extends Expr {
@@ -65,8 +65,8 @@ abstract class Expr {
   }
   
   static class Grouping extends Expr {
-    Grouping(Expr expression) {
-      this.expression = expression;
+    Grouping(Expr expr) {
+      this.expr = expr;
     }
 
     @Override
@@ -74,7 +74,7 @@ abstract class Expr {
       return visitor.visitGroupingExpr(this);
     }
 
-    final Expr expression;
+    final Expr expr;
   }
   
   static class Literal extends Expr {
@@ -136,8 +136,8 @@ abstract class Expr {
   }
   
   static class Lambda extends Expr {
-    Lambda(List<Token> parameters, Stmt.BlockStmt body) {
-      this.parameters = parameters;
+    Lambda(List<Token> params, Stmt.BlockStmt body) {
+      this.params = params;
       this.body = body;
     }
 
@@ -146,7 +146,7 @@ abstract class Expr {
       return visitor.visitLambdaExpr(this);
     }
 
-    final List<Token> parameters;
+    final List<Token> params;
     final Stmt.BlockStmt body;
   }
   

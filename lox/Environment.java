@@ -50,7 +50,7 @@ public class Environment {
     
     public void assign(Token name, Object value) {
         if (tryAssign(name.lexeme, value)) return;
-        throw new RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
+        throw new RuntimeError(name, "Assignment to undefined variable '" + name.lexeme + "'.");
     }
     
     // Returns the value assigned to a variable.
@@ -63,7 +63,13 @@ public class Environment {
             throw new RuntimeError(name, "Variable '" + name.lexeme + "' was not initialised nor assigned to.");
         }
         if (env != null) return env.get(name);
-        throw new RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
+        throw new RuntimeError(name, "Reference to undefined variable '" + name.lexeme + "'.");
+    }
+    
+    public Environment ancestor(int depth) {
+       Environment e = this;
+       for (int i = 0; i < depth; i++) e = e.env;
+       return e;
     }
     
     private boolean tryAssign(String variable, Object value) {

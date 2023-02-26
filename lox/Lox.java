@@ -59,6 +59,10 @@ public class Lox {
     List<Stmt> prog = parser.parse();
     if (hadError) return;
     
+    Resolver resolver = new Resolver(interpreter);
+    resolver.resolve(prog);
+    if (hadError) return;
+    
     System.out.println("Interpreting...");
     interpreter.interpret(prog);
   }

@@ -11,6 +11,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     // scopes.
     private Environment env = globals;
     
+    final private Map<Expr, Integer> locals = new HashMap<>();
+    
     Interpreter() {
         globals.declare("clock", new LoxCallable() {
             @Override
@@ -135,7 +137,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    
    @Override
    public Object visitUnaryExpr(Expr.Unary expr) {
-       Object v = expr.right.accept(this);
+       Object v = expr.expr.accept(this);
        
        switch (expr.operator.type) {
             case MINUS:
@@ -242,18 +244,23 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
    
    @Override
    public Object visitGroupingExpr(Expr.Grouping expr) {
-       return expr.expression.accept(this);
+       return expr.expr.accept(this);
    }
    
-   @Override
-   public Object visitLiteralExpr(Expr.Literal expr) {
-      return expr.value; 
-   } 
+    @Override
+    public Object visitLiteralExpr(Expr.Literal expr) {
+        return expr.value; 
+    } 
+    
+    @Override
+    public Object visitVariableExpr(Expr.Variable expr) {
+        return resolve(expr).get(expr.name);
+    } 
    
-   @Override
-   public Object visitVariableExpr(Expr.Variable expr) {
-       return env.get(expr.name);
-   } 
+    private Environment resolve(Expr expr) {
+        if (locals.containsKey(expr)) return env.ancestor(locals.get(expr));
+        return globals;
+    }
    
     public static void main(String[] args) {
         Expr expression = new Expr.Binary(
@@ -270,7 +277,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     @Override
     public Object visitAssignExpr(Expr.Assign expr) {
         Object v = eval(expr.expr);
-        env.assign(expr.name, v);
+        resolve(expr).assign(expr.name, v);
         return v;
     }
     
@@ -293,7 +300,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     
     @Override
     public Object visitLambdaExpr(Expr.Lambda expr) {
-        return new LoxFunction("lambda", expr.parameters, expr.body, env);
+        return new LoxFunction("lambda", expr.params, expr.body, env);
     }
     
     private boolean isEqual(Object left, Object right) {
@@ -306,6 +313,10 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
        if (operand == null) return false;
        if (operand instanceof Boolean) return (boolean) operand;
        return true;
+   }
+   
+   void resolve(Expr expr, int depth) {
+      locals.put(expr, depth);
    }
    
    private void checkNumberOperand(Token operator, Object operand) {

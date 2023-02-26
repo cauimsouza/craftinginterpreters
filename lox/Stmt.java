@@ -49,12 +49,12 @@ abstract class Stmt {
     
     static class FunDeclStmt extends Stmt {
         final Token name;
-        final List<Token> parameters;
+        final List<Token> params;
         final Stmt.BlockStmt body;
         
-        FunDeclStmt(Token name, List<Token> parameters, Stmt.BlockStmt body) {
+        FunDeclStmt(Token name, List<Token> params, Stmt.BlockStmt body) {
            this.name = name;
-           this.parameters = parameters;
+           this.params = params;
            this.body = body;
         }
         
@@ -126,8 +126,10 @@ abstract class Stmt {
     
     static class ReturnStmt extends Stmt {
         final Expr expr;
+        final Token keyword;
         
-        ReturnStmt(Expr expr) {
+        ReturnStmt(Token keyword, Expr expr) {
+            this.keyword = keyword;
             this.expr = expr;
         }
         

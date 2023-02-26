@@ -183,12 +183,13 @@ class Parser {
     }
     
     private Stmt returnStmt() {
+        Token t = previous();
         Expr expr = null;
         if (peek().type != TokenType.SEMICOLON) {
             expr = expression();
         }
         consume(TokenType.SEMICOLON, "Expect semicolon after return expression.");
-        return new Stmt.ReturnStmt(expr);
+        return new Stmt.ReturnStmt(t, expr);
     }
   
   private Stmt exprStmt() {
