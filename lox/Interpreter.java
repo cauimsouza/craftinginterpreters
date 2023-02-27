@@ -62,13 +62,13 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     @Override
     public Void visitVarDeclStmt(Stmt.VarDeclStmt stmt) {
         if (stmt.expr == null) env.declare(stmt.id);
-        else env.declare(stmt.id, eval(stmt.expr));
+        else env.declare(stmt.id.lexeme, eval(stmt.expr));
         return null;
     }
     
     @Override
     public Void visitFunDeclStmt(Stmt.FunDeclStmt stmt) {
-        env.declare(stmt.name, new LoxFunction(stmt, env));
+        env.declare(stmt.name.lexeme, new LoxFunction(stmt, env));
         return null;
     }
     
