@@ -8,15 +8,22 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private static class Access {
         boolean defined;
         boolean used;
+    }
+    
+    private static class TokenAccess extends Access {
         final Token token;
-        
-        Access(Token token) {
+        TokenAccess(Token token) {
             this.token = token;
         }
     }
     
-    // The value associated with a key represents whether or not we have finished
-    // resolving that variable's initialiser.
+    private static class This extends Access {
+        This() {
+            this.defined = true;
+            this.used = true;
+        }
+    }
+    
     private final Stack<Map<String, Access>> scopes = new Stack<>();
     private FunctionType currentFunction = FunctionType.NONE;
     private final Interpreter interpreter;
@@ -47,8 +54,34 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     
     @Override
     public Void visitFunDeclStmt(Stmt.FunDeclStmt fun) {
+        declare(fun.name);
         define(fun.name);
         resolveFun(fun.params, fun.body, FunctionType.FUNCTION);
+        return null;
+    }
+    
+    @Override
+    public Void visitClassDeclStmt(Stmt.ClassDeclStmt classStmt) {
+        declare(classStmt.name);
+        define(classStmt.name);
+        
+        beginScope();
+        // The first step is to initialise the new scope, which contains
+        // "this" and the methods. This will allow methods defined at the top
+        // of the class declaration to refer to methods declared later.
+        defineThis();
+        for (Stmt.FunDeclStmt fun : classStmt.mets) {
+            declare(fun.name);
+            define(fun.name);
+        }
+        
+        // Now resolve all the methods, including the constructor if there is any.
+        for (Stmt.FunDeclStmt fun : classStmt.mets)
+            resolveFun(fun.params, fun.body, FunctionType.METHOD);
+        if (classStmt.init != null)
+            resolveFun(classStmt.init.params, classStmt.init.body, FunctionType.CONSTRUCTOR);
+        
+        endScope();
         return null;
     }
     
@@ -56,6 +89,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitBlockStmt(Stmt.BlockStmt block) {
         beginScope();
         resolve(block.stmts);
+        checkUnusedVariables();
         endScope();
         return null;
     }
@@ -138,6 +172,13 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     
     @Override
+    public Void visitFieldAssignExpr(Expr.FieldAssign expr) {
+        resolve(expr.instance);
+        resolve(expr.expr);
+        return null;
+    }
+    
+    @Override
     public Void visitCallExpr(Expr.Call call) {
         resolve(call.expr);
         for (Expr arg : call.arguments) resolve(arg);
@@ -150,13 +191,21 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         return null;
     }
     
+    @Override
+    public Void visitAccessExpr(Expr.Access access) {
+        resolve(access.expr);
+        return null;
+    }
+    
     private void resolveFun(List<Token> params, Stmt.BlockStmt body, FunctionType type) {
         FunctionType prev = currentFunction;
         currentFunction = type;
         
         beginScope();
-        for (Token par : params)
+        for (Token par : params) {
+            declare(par);
             define(par);
+        }
         resolve(body.stmts);
         endScope();
         
@@ -178,17 +227,22 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         
         Map<String, Access> scope = scopes.peek();
         if (scope.containsKey(name.lexeme))
-            Lox.error(name, "Declaring variable of the same name in this scope.");
+            Lox.error(name, "Trying to redeclare symbol.");
         
-        scope.put(name.lexeme, new Access(name));
+        scope.put(name.lexeme, new TokenAccess(name));
     }
     
     private void define(Token name) {
         if (scopes.empty()) return;
         
-        Access a = new Access(name);
+        Access a = new TokenAccess(name);
         a.defined = true;
         scopes.peek().put(name.lexeme, a);
+    }
+    
+    private void defineThis() {
+        Access t = new This();
+        scopes.peek().put("this", t);
     }
     
     private void resolve(Stmt s) {
@@ -204,16 +258,20 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     
     private void endScope() {
-        scopes.peek().forEach((k, v) -> {
-            if (v.used) return;
-            Lox.error(v.token, "Unused variable.");
-        });
-        
         scopes.pop();
+    }
+    
+    private void checkUnusedVariables() {
+        scopes.peek().forEach((k, v) -> {
+            if (v.used || !(v instanceof TokenAccess)) return;
+            Lox.error(((TokenAccess)v).token, "Unused variable.");
+        });
     }
 }
 
 enum FunctionType {
     NONE,
-    FUNCTION
+    FUNCTION,
+    METHOD,
+    CONSTRUCTOR
 }

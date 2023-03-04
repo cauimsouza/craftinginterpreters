@@ -73,6 +73,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     }
     
     @Override
+    public Void visitClassDeclStmt(Stmt.ClassDeclStmt stmt) {
+        env.declare(stmt.name.lexeme, new LoxClass(stmt, env));
+        return null;
+    }
+    
+    @Override
     public Void visitBlockStmt(Stmt.BlockStmt stmt) {
         executeBlock(stmt, new Environment(env));
         return null;
@@ -282,6 +288,18 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     }
     
     @Override
+    public Object visitFieldAssignExpr(Expr.FieldAssign expr) {
+        Object o = eval(expr.instance);
+        if (!(o instanceof LoxInstance))
+            throw new RuntimeError(expr.field, "Only instances can have member fields.");
+            
+        Object v = eval(expr.expr);
+        ((LoxInstance) o).assign(expr.field, v);
+        
+        return v;
+    }
+    
+    @Override
     public Object visitCallExpr(Expr.Call expr) {
         Object callee = eval(expr.expr);
         if (!(callee instanceof LoxCallable))
@@ -301,6 +319,17 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     @Override
     public Object visitLambdaExpr(Expr.Lambda expr) {
         return new LoxFunction("lambda", expr.params, expr.body, env);
+    }
+    
+    @Override
+    public Object visitAccessExpr(Expr.Access access) {
+        Object o = eval(access.expr);
+        Token field = access.field;
+        if (!(o instanceof LoxInstance))
+            throw new RuntimeError(field, "Only instances have properties.");
+            
+        LoxInstance instance = (LoxInstance)o;
+        return instance.get(field);
     }
     
     private boolean isEqual(Object left, Object right) {

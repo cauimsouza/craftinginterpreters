@@ -9,8 +9,10 @@ abstract class Expr {
     R visitLiteralExpr(Literal expr);
     R visitVariableExpr(Variable expr);
     R visitAssignExpr(Assign expr);
+    R visitFieldAssignExpr(FieldAssign expr);
     R visitCallExpr(Call expr);
     R visitLambdaExpr(Lambda expr);
+    R visitAccessExpr(Access expr);
   }
   
   static class Unary extends Expr {
@@ -118,6 +120,23 @@ abstract class Expr {
     final Expr expr;
   }
   
+  static class FieldAssign extends Expr {
+    FieldAssign(Expr instance, Token field, Expr expr) {
+      this.instance = instance;
+      this.field = field;
+      this.expr = expr;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitFieldAssignExpr(this);
+    }
+
+    final Expr instance;
+    final Token field;
+    final Expr expr;
+  }
+  
   static class Call extends Expr {
     Call(Expr expr, Token paren, List<Expr> arguments) {
       this.expr = expr;
@@ -148,6 +167,21 @@ abstract class Expr {
 
     final List<Token> params;
     final Stmt.BlockStmt body;
+  }
+  
+  static class Access extends Expr {
+    Access(Expr expr, Token field) {
+      this.expr = expr;
+      this.field = field;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitAccessExpr(this);
+    }
+
+    final Expr expr;
+    final Token field;
   }
   
   abstract <R> R accept(Visitor<R> visitor);

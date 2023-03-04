@@ -5,6 +5,7 @@ abstract class Stmt {
         R visitExprStmt(ExprStmt stmt);
         R visitVarDeclStmt(VarDeclStmt stmt);
         R visitFunDeclStmt(FunDeclStmt stmt);
+        R visitClassDeclStmt(ClassDeclStmt stmt);
         R visitBlockStmt(BlockStmt stmt);
         R visitIfStmt(IfStmt stmt);
         R visitWhileStmt(WhileStmt stmt);
@@ -61,6 +62,23 @@ abstract class Stmt {
         @Override
         <R> R accept(Visitor<R> visitor) {
           return visitor.visitFunDeclStmt(this);
+        }
+    }
+    
+    static class ClassDeclStmt extends Stmt {
+        final Token name;
+        final FunDeclStmt init;
+        final List<FunDeclStmt> mets;
+        
+        ClassDeclStmt(Token name, FunDeclStmt init, List<FunDeclStmt> mets) {
+           this.name = name;
+           this.init = init;
+           this.mets = mets;
+        }
+        
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+          return visitor.visitClassDeclStmt(this);
         }
     }
     

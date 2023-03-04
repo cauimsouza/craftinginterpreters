@@ -32,6 +32,7 @@ class Parser {
             match(TokenType.FUN);
             return funDeclStmt();
         }
+        if (match(TokenType.CLASS)) return classDeclStmt();
         
         return statement();
     }
@@ -55,15 +56,41 @@ class Parser {
         Token funName = previous();
         
         consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
-        
         List<Token> pars = parameters();
-        
         consume(TokenType.RIGHT_PAREN, "Expect ')' after parameter list.");
         
         consume(TokenType.LEFT_BRACE, "Expect '{' after parameter list.");
         Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
         
         return new Stmt.FunDeclStmt(funName, pars, body);
+    }
+    
+    private Stmt classDeclStmt() {
+        consume(TokenType.IDENTIFIER, "Expect identifier.");
+        Token className = previous();
+        consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");
+        
+        // TODO: No two methods can have the same name (not yet, in the future we'll add polymorphism :) )
+        List<Stmt.FunDeclStmt> mets = new ArrayList<>();
+        Stmt.FunDeclStmt init = null;
+        while (match(TokenType.IDENTIFIER)) {
+            Token methodName = previous(); 
+            
+            consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
+            List<Token> pars = parameters(); 
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters list.");
+            
+            consume(TokenType.LEFT_BRACE, "Expect '{' after parameters list.");
+            Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
+            
+            Stmt.FunDeclStmt met = new Stmt.FunDeclStmt(methodName, pars, body);
+            if (methodName.lexeme.equals("init")) init = met;
+            else mets.add(met);
+        }
+        
+        consume(TokenType.RIGHT_BRACE, "Expect '}' at the end of class definition.");
+        
+        return new Stmt.ClassDeclStmt(className, init, mets);
     }
     
     // parameters doesn't consume the closing parenthesis ')'.
@@ -223,6 +250,10 @@ class Parser {
           if (expr instanceof Expr.Variable) {
             return new Expr.Assign(((Expr.Variable) expr).name, right);
           }
+          if (expr instanceof Expr.Access) {
+            Expr.Access a = (Expr.Access) expr;
+            return new Expr.FieldAssign(a.expr, a.field, right);
+          }
           throw error(t, "Invalid assignment target.");
       }
       
@@ -348,17 +379,25 @@ class Parser {
      
      return expr;
   }
-  
+    
     private Expr call() {
         // primary -> primary (arguments?)*
         // arguments -> assignment ("," assignment)* It can be any expression with higher precedence than sequence
         Expr expr = primary();
         
-        while (match(TokenType.LEFT_PAREN)) {
-            Token paren = previous();
-            List<Expr> args = arguments(); 
-            consume (TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-            expr = new Expr.Call(expr, paren, args);
+        while (peek().type == TokenType.LEFT_PAREN || peek().type == TokenType.DOT) {
+            TokenType t = peek().type;
+            if (t == TokenType.LEFT_PAREN) {
+                Token paren = advance();
+                List<Expr> args = arguments(); 
+                consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+                expr = new Expr.Call(expr, paren, args);
+            } else {
+                advance(); 
+                consume(TokenType.IDENTIFIER, "Expect identifier after period."); 
+                Token field = previous();
+                expr = new Expr.Access(expr, field);
+            }
         }
         return expr;
     }
@@ -390,6 +429,8 @@ class Parser {
         }
         
         if (match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
+        
+        if (match(TokenType.THIS)) return new Expr.Variable(previous());
         
         if (match(TokenType.LEFT_PAREN)) {
             Expr expr = expression();

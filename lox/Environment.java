@@ -25,15 +25,6 @@ public class Environment {
         this.env = env;
     }
     
-    public Environment copy() {
-        Environment newEnv;
-        if (env == null) newEnv = new Environment();
-        else newEnv = new Environment(env.copy());
-        newEnv.variables = new HashMap<>(variables);
-        
-        return newEnv;
-    }
-    
     // Declares a new variable without assigning it to a value.
     public void declare(Token name) {
         variables.put(name.lexeme, new Value(name.lexeme));
@@ -63,7 +54,7 @@ public class Environment {
             throw new RuntimeError(name, "Variable '" + name.lexeme + "' was not initialised nor assigned to.");
         }
         if (env != null) return env.get(name);
-        throw new RuntimeError(name, "Reference to undefined variable '" + name.lexeme + "'.");
+        throw new RuntimeError(name, "Undefined variable '" + name.lexeme + "'.");
     }
     
     public Environment ancestor(int depth) {
