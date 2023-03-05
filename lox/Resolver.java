@@ -63,6 +63,11 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         beginScope();
         scopes.peek().put("this", new Access(new Token(TokenType.THIS, "this", null, 0)));
         
+        for (Stmt.FunDeclStmt method : classStmt.classMethods) {
+            if (method.name.lexeme.equals("init"))
+                Lox.error(method.name, "Class methods may not be called 'init'.");
+            resolveFun(method.params, method.body, FunctionType.METHOD);
+        }
         for (Stmt.FunDeclStmt method : classStmt.methods) {
             FunctionType t = FunctionType.METHOD;
             if (method.name.lexeme.equals("init")) t = FunctionType.CONSTRUCTOR;

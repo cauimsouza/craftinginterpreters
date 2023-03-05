@@ -1,13 +1,22 @@
 import java.util.List;
 import java.util.Map;
 
-class LoxClass implements LoxCallable {
+class LoxClass extends LoxInstance implements LoxCallable {
     final String name;
     private final Map<String, LoxFunction> methods;
     
     private final Token init = new Token(TokenType.IDENTIFIER, "init", null, 0);
     
-    LoxClass(String name, Map<String, LoxFunction> methods) {
+    // Use to create metaclasses
+    LoxClass(String name, Map<String, LoxFunction> classMethods) {
+        super();
+        this.name = name;
+        this.methods = classMethods;
+    }
+    
+    // Use to create classes
+    LoxClass(String name, Map<String, LoxFunction> methods, LoxClass metaClass) {
+        super(metaClass);
         this.name = name;
         this.methods = methods;
     }

@@ -76,10 +76,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     public Void visitClassDeclStmt(Stmt.ClassDeclStmt stmt) {
         env.declare(stmt.name);
         
+        Map<String, LoxFunction> classMethods = new HashMap<>();
+        stmt.classMethods.forEach(m -> classMethods.put(m.name.lexeme, new LoxFunction(m, env)));
+        LoxClass metaClass = new LoxClass("Class " + stmt.name.lexeme, classMethods);
+        
         Map<String, LoxFunction> methods = new HashMap<>();
         stmt.methods.forEach(m -> methods.put(m.name.lexeme, new LoxFunction(m, env)));
+        LoxClass klass = new LoxClass(stmt.name.lexeme, methods, metaClass);
         
-        LoxClass klass = new LoxClass(stmt.name.lexeme, methods);
         env.assign(stmt.name, klass); 
         return null;
     }

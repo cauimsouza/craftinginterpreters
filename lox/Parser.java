@@ -72,29 +72,37 @@ class Parser {
         Token className = previous();
         consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");
         
-        // TODO: No two methods can have the same name (not yet, in the future we'll add polymorphism :) )
-        Set<String> metNames = new HashSet<>();
-        List<Stmt.FunDeclStmt> mets = new ArrayList<>();
-        while (match(TokenType.IDENTIFIER)) {
-            Token methodName = previous(); 
+        Set<String> mNames = new HashSet<>();
+        Set<String> cmNames = new HashSet<>();
+        List<Stmt.FunDeclStmt> methods = new ArrayList<>();
+        List<Stmt.FunDeclStmt> classMethods = new ArrayList<>();
+        while (peek().type == TokenType.IDENTIFIER || peek().type == TokenType.CLASS) {
+            boolean classMethod = match(TokenType.CLASS);
+            Token methodName = advance(); 
             
-            if (metNames.contains(methodName.lexeme)) error(methodName, "Can't have more than one method with the same name.");
-            metNames.add(methodName.lexeme);
+            if (classMethod) {
+                if (cmNames.contains(methodName.lexeme)) error(methodName, "Can't have more than one method with the same name.");
+                cmNames.add(methodName.lexeme);
+            } else {
+                if (mNames.contains(methodName.lexeme)) error(methodName, "Can't have more than one method with the same name.");
+                mNames.add(methodName.lexeme);
+            }
             
             consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
-            List<Token> pars = parameters(); 
+            List<Token> params = parameters(); 
             consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters list.");
             
             consume(TokenType.LEFT_BRACE, "Expect '{' after parameters list.");
             Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
             
-            Stmt.FunDeclStmt met = new Stmt.FunDeclStmt(methodName, pars, body);
-            mets.add(met);
+            Stmt.FunDeclStmt method = new Stmt.FunDeclStmt(methodName, params, body);
+            if (classMethod) classMethods.add(method);
+            else methods.add(method);
         }
         
         consume(TokenType.RIGHT_BRACE, "Expect '}' at the end of class definition.");
         
-        return new Stmt.ClassDeclStmt(className, mets);
+        return new Stmt.ClassDeclStmt(className, classMethods, methods);
     }
     
     // parameters doesn't consume the closing parenthesis ')'.

@@ -6,7 +6,18 @@ class LoxInstance {
     private final LoxClass klass;
     private final Map<String, Object> fields = new HashMap<>();
     
-    LoxInstance(LoxClass klass) {
+    private static class MetaClass extends LoxClass {
+        MetaClass() {
+            super("MetaClass", new HashMap<>());
+        }
+    }
+    private static final LoxClass metaClass = new MetaClass();
+    
+    LoxInstance() { // For metaclass instances
+        this.klass = metaClass;
+    }
+    
+    LoxInstance(LoxClass klass) { // For class instances
         this.klass = klass;
     }
     
@@ -21,7 +32,7 @@ class LoxInstance {
         if (fields.containsKey(name.lexeme)) return fields.get(name.lexeme);
             
         if (!klass.hasMethod(name)) {
-            throw new RuntimeError(name, "Undefined property " + name.lexeme + ".");
+            throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
         }
         
         LoxFunction method = klass.getMethod(name);
