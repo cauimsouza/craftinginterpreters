@@ -1,3 +1,5 @@
+import java.util.Set;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
 
@@ -71,9 +73,13 @@ class Parser {
         consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");
         
         // TODO: No two methods can have the same name (not yet, in the future we'll add polymorphism :) )
+        Set<String> metNames = new HashSet<>();
         List<Stmt.FunDeclStmt> mets = new ArrayList<>();
         while (match(TokenType.IDENTIFIER)) {
             Token methodName = previous(); 
+            
+            if (metNames.contains(methodName.lexeme)) error(methodName, "Can't have more than one method with the same name.");
+            metNames.add(methodName.lexeme);
             
             consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
             List<Token> pars = parameters(); 
@@ -97,18 +103,19 @@ class Parser {
         
         if (peek().type == TokenType.RIGHT_PAREN) return pars;
         
+        Set<String> parNames = new HashSet<>();
         while (true) {
             if (pars.size() >= 255) {
                 error(peek(), "Can't have more than 255 parameters.");
             }
             
             consume(TokenType.IDENTIFIER, "Expect identifier.");
-            for (Token t : pars) {
-                if (t.lexeme.equals(previous().lexeme)) {
-                    error(previous(), "Can't have multiple parameters with the same name.");
-                }
+            Token par = previous();
+            if (parNames.contains(par.lexeme)) {
+                error(par, "Can't have multiple parameters with the same name.");
             }
-            pars.add(previous());
+            parNames.add(par.lexeme);
+            pars.add(par);
             
             if (peek().type == TokenType.RIGHT_PAREN) break;
             consume(TokenType.COMMA, "Expect ',' or ')' after parameter.");
