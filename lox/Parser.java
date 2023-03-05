@@ -72,7 +72,6 @@ class Parser {
         
         // TODO: No two methods can have the same name (not yet, in the future we'll add polymorphism :) )
         List<Stmt.FunDeclStmt> mets = new ArrayList<>();
-        Stmt.FunDeclStmt init = null;
         while (match(TokenType.IDENTIFIER)) {
             Token methodName = previous(); 
             
@@ -84,13 +83,12 @@ class Parser {
             Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
             
             Stmt.FunDeclStmt met = new Stmt.FunDeclStmt(methodName, pars, body);
-            if (methodName.lexeme.equals("init")) init = met;
-            else mets.add(met);
+            mets.add(met);
         }
         
         consume(TokenType.RIGHT_BRACE, "Expect '}' at the end of class definition.");
         
-        return new Stmt.ClassDeclStmt(className, init, mets);
+        return new Stmt.ClassDeclStmt(className, mets);
     }
     
     // parameters doesn't consume the closing parenthesis ')'.
@@ -430,7 +428,7 @@ class Parser {
         
         if (match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
         
-        if (match(TokenType.THIS)) return new Expr.Variable(previous());
+        if (match(TokenType.THIS)) return new Expr.This(previous());
         
         if (match(TokenType.LEFT_PAREN)) {
             Expr expr = expression();

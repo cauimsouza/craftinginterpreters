@@ -1,38 +1,49 @@
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
 class LoxInstance {
+    private final LoxClass klass;
     private final Map<String, Object> fields = new HashMap<>();
-    private final Map<String, Object> methods = new HashMap<>();
-    private final String className;
     
-    LoxInstance(String className) {
-        this.className = className;
+    LoxInstance(LoxClass klass) {
+        this.klass = klass;
     }
     
-    Object get(Token token) {
-        if (methods.containsKey(token.lexeme))
-            return methods.get(token.lexeme);
+    Object get(Token name) {
+        if (name.lexeme.equals("init"))
+            throw new RuntimeError(name, "Undefined property 'init'.");
             
-        if (fields.containsKey(token.lexeme))
-            return fields.get(token.lexeme);
-            
-        throw new RuntimeError(token, "Instance has no method or property " + token.lexeme + ".");
+        return getAny(name);
     }
     
-    void assign(Token token, Object value) {
-        if (methods.containsKey(token.lexeme))
-            throw new RuntimeError(token, "Cannot reassign instance method '" + token.lexeme + "'.");
+    Object getAny(Token name) {
+        if (fields.containsKey(name.lexeme)) return fields.get(name.lexeme);
+            
+        if (!klass.hasMethod(name)) {
+            throw new RuntimeError(name, "Undefined property " + name.lexeme + ".");
+        }
+        
+        LoxFunction method = klass.getMethod(name);
+        
+        Environment closure = new Environment(method.closure);
+        closure.declare("this", this);
+        
+        return new LoxFunction(method.name, method.params, method.body, closure);
+    }
+    
+    void assign(Token name, Object value) {
+        if (name.lexeme.equals("init"))
+            throw new RuntimeError(name, "Cannot assign property with name 'init' (reserved for constructors).");
+            
+        if (klass.hasMethod(name))
+            throw new RuntimeError(name, "Cannot reassign instance method '" + name.lexeme + "'.");
 
-        fields.put(token.lexeme, value);
-    }
-    
-    void assignMethod(String name, Object method) {
-        methods.put(name, method);
+        fields.put(name.lexeme, value);
     }
     
     @Override
     public String toString() {
-        return "<instance " + className + ">";
+        return "<instance " + klass.name + ">";
     }
 }

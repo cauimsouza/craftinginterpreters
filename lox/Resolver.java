@@ -8,24 +8,16 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private static class Access {
         boolean defined;
         boolean used;
-    }
-    
-    private static class TokenAccess extends Access {
-        final Token token;
-        TokenAccess(Token token) {
-            this.token = token;
-        }
-    }
-    
-    private static class This extends Access {
-        This() {
-            this.defined = true;
-            this.used = true;
+        final Token name;
+        
+        Access(Token name) {
+            this.name = name;
         }
     }
     
     private final Stack<Map<String, Access>> scopes = new Stack<>();
     private FunctionType currentFunction = FunctionType.NONE;
+    private ClassType currentClass = ClassType.NONE;
     private final Interpreter interpreter;
     
     Resolver(Interpreter interpreter) {
@@ -62,26 +54,25 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     
     @Override
     public Void visitClassDeclStmt(Stmt.ClassDeclStmt classStmt) {
+        ClassType old = currentClass;
+        currentClass = ClassType.CLASS;
+        
         declare(classStmt.name);
         define(classStmt.name);
         
         beginScope();
-        // The first step is to initialise the new scope, which contains
-        // "this" and the methods. This will allow methods defined at the top
-        // of the class declaration to refer to methods declared later.
-        defineThis();
-        for (Stmt.FunDeclStmt fun : classStmt.mets) {
-            declare(fun.name);
-            define(fun.name);
+        scopes.peek().put("this", new Access(new Token(TokenType.THIS, "this", null, 0)));
+        
+        for (Stmt.FunDeclStmt method : classStmt.methods) {
+            FunctionType t = FunctionType.METHOD;
+            if (method.name.lexeme.equals("init")) t = FunctionType.CONSTRUCTOR;
+            resolveFun(method.params, method.body, t);
         }
         
-        // Now resolve all the methods, including the constructor if there is any.
-        for (Stmt.FunDeclStmt fun : classStmt.mets)
-            resolveFun(fun.params, fun.body, FunctionType.METHOD);
-        if (classStmt.init != null)
-            resolveFun(classStmt.init.params, classStmt.init.body, FunctionType.CONSTRUCTOR);
-        
         endScope();
+        
+        currentClass = old;
+        
         return null;
     }
     
@@ -117,7 +108,15 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     @Override
     public Void visitReturnStmt(Stmt.ReturnStmt stmt) {
         if (currentFunction == FunctionType.NONE) Lox.error(stmt.keyword, "'return' statement outside any function.");
+        if (currentFunction == FunctionType.CONSTRUCTOR && stmt.expr != null) Lox.error(stmt.keyword, "Can't return a value from a constructor.");
         if (stmt.expr != null) resolve(stmt.expr);
+        return null;
+    }
+    
+    @Override
+    public Void visitThisExpr(Expr.This expr) {
+        if (currentClass == ClassType.NONE) Lox.error(expr.token, "'this' outside any class declaration.");
+        resolveLocal(expr, expr.token);
         return null;
     }
     
@@ -229,20 +228,15 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (scope.containsKey(name.lexeme))
             Lox.error(name, "Trying to redeclare symbol.");
         
-        scope.put(name.lexeme, new TokenAccess(name));
+        scope.put(name.lexeme, new Access(name));
     }
     
     private void define(Token name) {
         if (scopes.empty()) return;
         
-        Access a = new TokenAccess(name);
+        Access a = new Access(name);
         a.defined = true;
         scopes.peek().put(name.lexeme, a);
-    }
-    
-    private void defineThis() {
-        Access t = new This();
-        scopes.peek().put("this", t);
     }
     
     private void resolve(Stmt s) {
@@ -263,15 +257,20 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     
     private void checkUnusedVariables() {
         scopes.peek().forEach((k, v) -> {
-            if (v.used || !(v instanceof TokenAccess)) return;
-            Lox.error(((TokenAccess)v).token, "Unused variable.");
+            if (v.used || v.name.lexeme.equals("this") || !(v instanceof Access)) return;
+            Lox.error(((Access)v).name, "Unused variable.");
         });
     }
 }
 
 enum FunctionType {
-    NONE,
-    FUNCTION,
-    METHOD,
-    CONSTRUCTOR
+    NONE, // Not inside a function declaration
+    FUNCTION, // Inside a function declaration
+    METHOD, // Inside a method declaration
+    CONSTRUCTOR // Inside a constructor
+}
+
+enum ClassType {
+    NONE, // Not inside a class declaration.
+    CLASS // Inside a class declaration.
 }

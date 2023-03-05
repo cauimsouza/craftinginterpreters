@@ -2,6 +2,7 @@ import java.util.List;
 
 abstract class Expr {
   interface Visitor<R> {
+    R visitThisExpr(This expr);
     R visitUnaryExpr(Unary expr);
     R visitBinaryExpr(Binary expr);
     R visitTernaryExpr(Ternary expr);
@@ -13,6 +14,19 @@ abstract class Expr {
     R visitCallExpr(Call expr);
     R visitLambdaExpr(Lambda expr);
     R visitAccessExpr(Access expr);
+  }
+  
+  static class This extends Expr {
+    This(Token token) {
+      this.token = token;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitThisExpr(this);
+    }
+
+    final Token token;
   }
   
   static class Unary extends Expr {

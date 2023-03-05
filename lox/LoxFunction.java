@@ -1,10 +1,10 @@
 import java.util.List;
 
 class LoxFunction implements LoxCallable {
-    private final String name;
-    private final List<Token> params;
-    private final Stmt.BlockStmt body;
-    private final Environment closure;
+    final String name;
+    final List<Token> params;
+    final Stmt.BlockStmt body;
+    final Environment closure;
     
     LoxFunction(Stmt.FunDeclStmt declaration, Environment closure) {
         this.name = declaration.name.lexeme;

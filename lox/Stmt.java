@@ -67,13 +67,11 @@ abstract class Stmt {
     
     static class ClassDeclStmt extends Stmt {
         final Token name;
-        final FunDeclStmt init;
-        final List<FunDeclStmt> mets;
+        final List<FunDeclStmt> methods;
         
-        ClassDeclStmt(Token name, FunDeclStmt init, List<FunDeclStmt> mets) {
+        ClassDeclStmt(Token name, List<FunDeclStmt> methods) {
            this.name = name;
-           this.init = init;
-           this.mets = mets;
+           this.methods = methods;
         }
         
         @Override

@@ -1,49 +1,32 @@
 import java.util.List;
+import java.util.Map;
 
 class LoxClass implements LoxCallable {
-    private final String name;
-    private final Stmt.FunDeclStmt initMet;
-    private final List<Stmt.FunDeclStmt> mets;
-    private final Environment closure;
+    final String name;
+    private final Map<String, LoxFunction> methods;
     
-    LoxClass(Stmt.ClassDeclStmt declaration, Environment closure) {
-        this.name = declaration.name.lexeme;
-        this.initMet = declaration.init;
-        this.mets = declaration.mets; 
-        this.closure = closure;
+    private final Token init = new Token(TokenType.IDENTIFIER, "init", null, 0);
+    
+    LoxClass(String name, Map<String, LoxFunction> methods) {
+        this.name = name;
+        this.methods = methods;
     }
     
     @Override
     public int arity() {
-        if (this.initMet == null) return 0;
-        return initMet.params.size();
+        if (!methods.containsKey("init")) return 0;
+        return methods.get("init").arity();
     }
     
     @Override
     public Object call(Interpreter interpreter, List<Object> arguments) {
-        Environment env = new Environment(closure); 
+        if (!methods.containsKey("init")) 
+            return new LoxInstance(this);
         
-        // First we initialise the scope of the class body.
+        LoxInstance instance = new LoxInstance(this);
+        if (!methods.containsKey("init")) return instance;
         
-        LoxInstance instance = new LoxInstance(name); 
-        env.declare("this", instance); // "this" now refers to the instance just created
-        
-        // We add the class to the environment so that it's possible for the instance
-        // to have fields that are instances of the same class, and so that it's possible
-        // for the methods to create new instances of the same class.
-        env.declare(name, this);
-        
-        for (Stmt.FunDeclStmt metDecl : mets) {
-            LoxFunction met = new LoxFunction(metDecl, env);
-            env.declare(metDecl.name.lexeme, met);
-            instance.assignMethod(metDecl.name.lexeme, met);
-        }
-        
-        // Now we call the constructor. The constructor can call helper methods.
-        // TODO: An init must not contain a return statement.
-        if (this.initMet == null) return instance;
-        LoxFunction constructor = new LoxFunction(this.initMet, env);
-        constructor.call(interpreter, arguments);
+        ((LoxFunction)instance.getAny(init)).call(interpreter, arguments);
         
         return instance;
     }
@@ -51,5 +34,13 @@ class LoxClass implements LoxCallable {
     @Override
     public String toString() {
         return "<class " + name + ">";
+    }
+    
+    boolean hasMethod(Token name) {
+        return methods.containsKey(name.lexeme);
+    }
+    
+    LoxFunction getMethod(Token name) {
+        return methods.get(name.lexeme);
     }
 }
