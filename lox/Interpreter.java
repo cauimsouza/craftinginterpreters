@@ -82,6 +82,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         
         Map<String, LoxFunction> methods = new HashMap<>();
         stmt.methods.forEach(m -> methods.put(m.name.lexeme, new LoxFunction(m, env)));
+        
         LoxClass klass = new LoxClass(stmt.name.lexeme, methods, metaClass);
         
         env.assign(stmt.name, klass); 
@@ -333,7 +334,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     
     @Override
     public Object visitLambdaExpr(Expr.Lambda expr) {
-        return new LoxFunction("lambda", expr.params, expr.body, env);
+        return new LoxFunction("lambda", expr.params, expr.body, false, env);
     }
     
     @Override
@@ -343,8 +344,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         if (!(o instanceof LoxInstance))
             throw new RuntimeError(field, "Only instances have properties.");
             
-        LoxInstance instance = (LoxInstance)o;
-        return instance.get(field);
+        return ((LoxInstance) o).get(this, field);
     }
     
     private boolean isEqual(Object left, Object right) {

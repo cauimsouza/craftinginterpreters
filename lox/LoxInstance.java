@@ -1,4 +1,5 @@
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -21,26 +22,25 @@ class LoxInstance {
         this.klass = klass;
     }
     
-    Object get(Token name) {
+    Object get(Interpreter interpreter, Token name) {
         if (name.lexeme.equals("init"))
             throw new RuntimeError(name, "Undefined property 'init'.");
             
-        return getAny(name);
+        return getAny(interpreter, name);
     }
     
-    Object getAny(Token name) {
+    Object getAny(Interpreter interpreter, Token name) {
         if (fields.containsKey(name.lexeme)) return fields.get(name.lexeme);
-            
-        if (!klass.hasMethod(name)) {
+        if (!klass.hasMethod(name))
             throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
-        }
         
         LoxFunction method = klass.getMethod(name);
-        
         Environment closure = new Environment(method.closure);
         closure.declare("this", this);
-        
-        return new LoxFunction(method.name, method.params, method.body, closure);
+         
+        method = new LoxFunction(method, closure);
+        if (method.getter) return method.call(interpreter, new ArrayList<>());
+        return method;
     }
     
     void assign(Token name, Object value) {

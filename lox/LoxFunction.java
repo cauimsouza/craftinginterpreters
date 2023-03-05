@@ -4,19 +4,30 @@ class LoxFunction implements LoxCallable {
     final String name;
     final List<Token> params;
     final Stmt.BlockStmt body;
+    final boolean getter;
     final Environment closure;
     
     LoxFunction(Stmt.FunDeclStmt declaration, Environment closure) {
         this.name = declaration.name.lexeme;
         this.params = declaration.params;
         this.body = declaration.body;
+        this.getter = declaration.getter;
         this.closure = closure;
     }
     
-    LoxFunction(String name, List<Token> params, Stmt.BlockStmt body, Environment closure) {
+    LoxFunction(LoxFunction function, Environment closure) {
+        this.name = function.name;
+        this.params = function.params;
+        this.body = function.body;
+        this.getter = function.getter;
+        this.closure = closure;
+    }
+    
+    LoxFunction(String name, List<Token> params, Stmt.BlockStmt body, boolean getter, Environment closure) {
         this.name = name;
         this.params = params;
         this.body = body;
+        this.getter = getter;
         this.closure = closure;
     }
     

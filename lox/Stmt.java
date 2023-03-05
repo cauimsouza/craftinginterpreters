@@ -52,11 +52,13 @@ abstract class Stmt {
         final Token name;
         final List<Token> params;
         final Stmt.BlockStmt body;
+        final boolean getter;
         
-        FunDeclStmt(Token name, List<Token> params, Stmt.BlockStmt body) {
+        FunDeclStmt(Token name, List<Token> params, Stmt.BlockStmt body, boolean getter) {
            this.name = name;
            this.params = params;
            this.body = body;
+           this.getter = getter;
         }
         
         @Override

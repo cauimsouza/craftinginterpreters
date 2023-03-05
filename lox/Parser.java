@@ -58,13 +58,13 @@ class Parser {
         Token funName = previous();
         
         consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
-        List<Token> pars = parameters();
+        List<Token> params = parameters();
         consume(TokenType.RIGHT_PAREN, "Expect ')' after parameter list.");
         
         consume(TokenType.LEFT_BRACE, "Expect '{' after parameter list.");
         Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
         
-        return new Stmt.FunDeclStmt(funName, pars, body);
+        return new Stmt.FunDeclStmt(funName, params, body, false);
     }
     
     private Stmt classDeclStmt() {
@@ -88,14 +88,19 @@ class Parser {
                 mNames.add(methodName.lexeme);
             }
             
-            consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
-            List<Token> params = parameters(); 
-            consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters list.");
+            boolean getter;
+            List<Token> params = new ArrayList<>();
+            if (match(TokenType.LEFT_PAREN)) {
+                getter = false;
+                params = parameters(); 
+                consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters list.");
+            } else if (peek().type == TokenType.LEFT_BRACE) getter = true;
+            else throw error(peek(), "Expect '(' or '{' after method name.");
             
             consume(TokenType.LEFT_BRACE, "Expect '{' after parameters list.");
             Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
             
-            Stmt.FunDeclStmt method = new Stmt.FunDeclStmt(methodName, params, body);
+            Stmt.FunDeclStmt method = new Stmt.FunDeclStmt(methodName, params, body, getter);
             if (classMethod) classMethods.add(method);
             else methods.add(method);
         }
@@ -107,28 +112,28 @@ class Parser {
     
     // parameters doesn't consume the closing parenthesis ')'.
     private List<Token> parameters() {
-        List<Token> pars = new ArrayList<>();
+        List<Token> params = new ArrayList<>();
         
-        if (peek().type == TokenType.RIGHT_PAREN) return pars;
+        if (peek().type == TokenType.RIGHT_PAREN) return params;
         
-        Set<String> parNames = new HashSet<>();
+        Set<String> paramNames = new HashSet<>();
         while (true) {
-            if (pars.size() >= 255) {
+            if (params.size() >= 255) {
                 error(peek(), "Can't have more than 255 parameters.");
             }
             
             consume(TokenType.IDENTIFIER, "Expect identifier.");
-            Token par = previous();
-            if (parNames.contains(par.lexeme)) {
-                error(par, "Can't have multiple parameters with the same name.");
+            Token param = previous();
+            if (paramNames.contains(param.lexeme)) {
+                error(param, "Can't have multiple parameters with the same name.");
             }
-            parNames.add(par.lexeme);
-            pars.add(par);
+            paramNames.add(param.lexeme);
+            params.add(param);
             
             if (peek().type == TokenType.RIGHT_PAREN) break;
             consume(TokenType.COMMA, "Expect ',' or ')' after parameter.");
         } 
-        return pars;
+        return params;
     }
     
     private Stmt statement() {
@@ -459,14 +464,14 @@ class Parser {
     private Expr lambdaExpr() {
         consume(TokenType.LEFT_PAREN, "Expect '(' after 'fun'.");
         
-        List<Token> pars = parameters();
+        List<Token> params = parameters();
         
         consume(TokenType.RIGHT_PAREN, "Expect ')' after parameter list.");
         
         consume(TokenType.LEFT_BRACE, "Expect '{' after parameter list.");
         Stmt.BlockStmt body = (Stmt.BlockStmt) blockStmt(); 
         
-        return new Expr.Lambda(pars, body);
+        return new Expr.Lambda(params, body);
     }
     
   

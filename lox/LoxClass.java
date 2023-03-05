@@ -32,7 +32,7 @@ class LoxClass extends LoxInstance implements LoxCallable {
         LoxInstance instance = new LoxInstance(this);
         if (!methods.containsKey("init")) return instance;
         
-        ((LoxFunction)instance.getAny(init)).call(interpreter, arguments);
+        ((LoxFunction)instance.getAny(interpreter, init)).call(interpreter, arguments);
         
         return instance;
     }
