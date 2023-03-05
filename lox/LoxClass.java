@@ -20,9 +20,6 @@ class LoxClass implements LoxCallable {
     
     @Override
     public Object call(Interpreter interpreter, List<Object> arguments) {
-        if (!methods.containsKey("init")) 
-            return new LoxInstance(this);
-        
         LoxInstance instance = new LoxInstance(this);
         if (!methods.containsKey("init")) return instance;
         
