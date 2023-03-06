@@ -69,7 +69,14 @@ class Parser {
     
     private Stmt classDeclStmt() {
         consume(TokenType.IDENTIFIER, "Expect identifier.");
-        Token className = previous();
+        Token klass = previous();
+        
+        Expr.SuperClass superClass = null;
+        if (match(TokenType.LESS)) {
+            consume(TokenType.IDENTIFIER, "Expect identifier.");
+            superClass = new Expr.SuperClass(previous());
+        }
+            
         consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");
         
         Set<String> mNames = new HashSet<>();
@@ -107,7 +114,7 @@ class Parser {
         
         consume(TokenType.RIGHT_BRACE, "Expect '}' at the end of class definition.");
         
-        return new Stmt.ClassDeclStmt(className, classMethods, methods);
+        return new Stmt.ClassDeclStmt(klass, superClass, classMethods, methods);
     }
     
     // parameters doesn't consume the closing parenthesis ')'.

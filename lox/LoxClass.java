@@ -4,6 +4,7 @@ import java.util.Map;
 class LoxClass extends LoxInstance implements LoxCallable {
     final String name;
     private final Map<String, LoxFunction> methods;
+    private final LoxClass superClass;
     
     private final Token init = new Token(TokenType.IDENTIFIER, "init", null, 0);
     
@@ -12,13 +13,15 @@ class LoxClass extends LoxInstance implements LoxCallable {
         super();
         this.name = name;
         this.methods = classMethods;
+        this.superClass = null;
     }
     
     // Use to create classes
-    LoxClass(String name, Map<String, LoxFunction> methods, LoxClass metaClass) {
+    LoxClass(String name, Map<String, LoxFunction> methods, LoxClass metaClass, LoxClass superClass) {
         super(metaClass);
         this.name = name;
         this.methods = methods;
+        this.superClass = superClass;
     }
     
     @Override
@@ -29,7 +32,12 @@ class LoxClass extends LoxInstance implements LoxCallable {
     
     @Override
     public Object call(Interpreter interpreter, List<Object> arguments) {
-        LoxInstance instance = new LoxInstance(this);
+        LoxInstance instance;
+        if (superClass != null) {
+            instance = (LoxInstance) (superClass.call(interpreter, arguments));
+            instance.klass = this;
+        } else instance = new LoxInstance(this);
+        
         if (!methods.containsKey("init")) return instance;
         
         ((LoxFunction)instance.getAny(interpreter, init)).call(interpreter, arguments);
@@ -43,10 +51,12 @@ class LoxClass extends LoxInstance implements LoxCallable {
     }
     
     boolean hasMethod(Token name) {
-        return methods.containsKey(name.lexeme);
+        return methods.containsKey(name.lexeme) ||
+            (superClass != null && superClass.hasMethod(name));
     }
     
     LoxFunction getMethod(Token name) {
-        return methods.get(name.lexeme);
+        if (methods.containsKey(name.lexeme)) return methods.get(name.lexeme);
+        return superClass.getMethod(name);
     }
 }

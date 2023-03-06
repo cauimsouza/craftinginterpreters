@@ -74,6 +74,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     
     @Override
     public Void visitClassDeclStmt(Stmt.ClassDeclStmt stmt) {
+        LoxClass superClass = null;
+        if (stmt.superClass != null) {
+            Object o = eval(stmt.superClass);
+            if (!(o instanceof LoxClass))
+                throw new RuntimeError(stmt.superClass.name, "Can only inherit from class.");
+            superClass = (LoxClass) o;
+        }
+        
         env.declare(stmt.name);
         
         Map<String, LoxFunction> classMethods = new HashMap<>();
@@ -83,7 +91,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         Map<String, LoxFunction> methods = new HashMap<>();
         stmt.methods.forEach(m -> methods.put(m.name.lexeme, new LoxFunction(m, env)));
         
-        LoxClass klass = new LoxClass(stmt.name.lexeme, methods, metaClass);
+        LoxClass klass = new LoxClass(stmt.name.lexeme, methods, metaClass, superClass);
         
         env.assign(stmt.name, klass); 
         return null;
@@ -150,6 +158,11 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         }
         
         return object.toString();
+    }
+    
+    @Override
+    public Object visitSuperClassExpr(Expr.SuperClass expr) {
+        return resolve(expr).get(expr.name);
     }
     
     @Override

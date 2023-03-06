@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 class LoxInstance {
-    private final LoxClass klass;
+    LoxClass klass;
     private final Map<String, Object> fields = new HashMap<>();
     
     private static class MetaClass extends LoxClass {

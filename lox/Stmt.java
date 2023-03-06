@@ -69,11 +69,13 @@ abstract class Stmt {
     
     static class ClassDeclStmt extends Stmt {
         final Token name;
+        final Expr.SuperClass superClass;
         final List<FunDeclStmt> classMethods;
         final List<FunDeclStmt> methods;
         
-        ClassDeclStmt(Token name, List<FunDeclStmt> classMethods, List<FunDeclStmt> methods) {
+        ClassDeclStmt(Token name, Expr.SuperClass superClass, List<FunDeclStmt> classMethods, List<FunDeclStmt> methods) {
            this.name = name;
+           this.superClass = superClass;
            this.classMethods = classMethods;
            this.methods = methods;
         }
