@@ -3,6 +3,7 @@ import java.util.List;
 abstract class Expr {
   interface Visitor<R> {
     R visitThisExpr(This expr);
+    R visitSuperExpr(Super expr);
     R visitUnaryExpr(Unary expr);
     R visitBinaryExpr(Binary expr);
     R visitTernaryExpr(Ternary expr);
@@ -27,6 +28,21 @@ abstract class Expr {
     }
 
     final Token token;
+  }
+  
+  static class Super extends Expr {
+    Super(Token keyword, Token method) {
+      this.keyword = keyword;
+      this.method = method;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitSuperExpr(this);
+    }
+
+    final Token keyword;
+    final Token method;
   }
   
   static class Unary extends Expr {

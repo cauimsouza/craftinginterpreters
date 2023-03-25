@@ -4,7 +4,7 @@ import java.util.Map;
 class LoxClass extends LoxInstance implements LoxCallable {
     final String name;
     private final Map<String, LoxFunction> methods;
-    private final LoxClass superClass;
+    final LoxClass superClass;
     
     private final Token init = new Token(TokenType.IDENTIFIER, "init", null, 0);
     
@@ -36,9 +36,13 @@ class LoxClass extends LoxInstance implements LoxCallable {
         if (superClass != null) {
             instance = (LoxInstance) (superClass.call(interpreter, arguments));
             instance.klass = this;
-        } else instance = new LoxInstance(this);
+        } else {
+            instance = new LoxInstance(this);
+        }
         
-        if (!methods.containsKey("init")) return instance;
+        if (!methods.containsKey("init")) {
+            return instance;
+        }
         
         ((LoxFunction)instance.getAny(interpreter, init)).call(interpreter, arguments);
         
@@ -55,8 +59,21 @@ class LoxClass extends LoxInstance implements LoxCallable {
             (superClass != null && superClass.hasMethod(name));
     }
     
-    LoxFunction getMethod(Token name) {
-        if (methods.containsKey(name.lexeme)) return methods.get(name.lexeme);
+    MethodClass getMethod(Token name) {
+        if (methods.containsKey(name.lexeme)) {
+            return new MethodClass(methods.get(name.lexeme), this);
+        }
+        
         return superClass.getMethod(name);
+    }
+    
+    class MethodClass {
+        MethodClass(LoxFunction method, LoxClass klass) {
+            this.method = method;
+            this.klass = klass;
+        }
+        
+        final LoxFunction method;
+        final LoxClass klass;
     }
 }

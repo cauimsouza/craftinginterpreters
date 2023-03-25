@@ -453,9 +453,20 @@ class Parser {
             return new Expr.Literal(previous().literal);
         }
         
-        if (match(TokenType.IDENTIFIER)) return new Expr.Variable(previous());
+        if (match(TokenType.IDENTIFIER)) {
+            return new Expr.Variable(previous());
+        }
         
-        if (match(TokenType.THIS)) return new Expr.This(previous());
+        if (match(TokenType.THIS)) {
+            return new Expr.This(previous());
+        }
+        
+        if (match(TokenType.SUPER)) {
+            Token keyword = previous();
+            consume(TokenType.DOT, "Expect '.' after 'super'.");
+            consume(TokenType.IDENTIFIER, "Expect method name after 'super'.");
+            return new Expr.Super(keyword, previous());
+        }
         
         if (match(TokenType.LEFT_PAREN)) {
             Expr expr = expression();
@@ -463,7 +474,9 @@ class Parser {
             return new Expr.Grouping(expr);
         }
         
-        if (match(TokenType.FUN)) return lambdaExpr();
+        if (match(TokenType.FUN)) {
+            return lambdaExpr();
+        }
         
         throw error(peek(), "Expect expression.");
     }

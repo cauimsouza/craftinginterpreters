@@ -166,6 +166,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     public Object visitThisExpr(Expr.This expr) {
         return resolve(expr).get(expr.token);
     }
+    
+    @Override
+    public Object visitSuperExpr(Expr.Super expr) {
+        LoxInstance instance = (LoxInstance) resolve(expr).get(expr.keyword);
+        return instance.get(this, expr.method);
+    }
    
    @Override
    public Object visitUnaryExpr(Expr.Unary expr) {

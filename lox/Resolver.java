@@ -66,11 +66,13 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
         if (classStmt.superClass != null) {
             resolve(classStmt.superClass);
+            currentClass = ClassType.SUBCLASS;
         }
         
         
         beginScope();
         scopes.peek().put("this", new Access(new Token(TokenType.THIS, "this", null, 0)));
+        scopes.peek().put("super", new Access(new Token(TokenType.SUPER, "super", null, 0)));
         
         for (Stmt.FunDeclStmt method : classStmt.classMethods) {
             if (method.name.lexeme.equals("init"))
@@ -129,8 +131,23 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     
     @Override
     public Void visitThisExpr(Expr.This expr) {
-        if (currentClass == ClassType.NONE) Lox.error(expr.token, "'this' outside any class declaration.");
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.token, "'this' outside any class declaration.");
+        }
+        
         resolveLocal(expr, expr.token);
+        return null;
+    }
+    
+    @Override
+    public Void visitSuperExpr(Expr.Super expr) {
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword, "Can't use 'super' outside of a class.");
+        } else if (currentClass == ClassType.CLASS) {
+            Lox.error(expr.keyword, "Can't use 'super' in a class with no superclass.");
+        }
+        
+        resolveLocal(expr, expr.keyword);
         return null;
     }
     
@@ -286,5 +303,6 @@ enum FunctionType {
 
 enum ClassType {
     NONE, // Not inside a class declaration.
-    CLASS // Inside a class declaration.
+    CLASS, // Inside a class declaration.
+    SUBCLASS, // Inside a subclass declaration.
 }
