@@ -63,7 +63,9 @@ class LoxClass extends LoxInstance implements LoxCallable {
         if (methods.containsKey(name.lexeme)) {
             return new MethodClass(methods.get(name.lexeme), this);
         }
-        
+        if (superClass == null) {
+            return null;
+        }
         return superClass.getMethod(name);
     }
     

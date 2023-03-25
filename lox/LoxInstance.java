@@ -42,11 +42,11 @@ class LoxInstance {
         if (fields.containsKey(name.lexeme)) {
             return fields.get(name.lexeme);
         }
-        if (!klass.hasMethod(name)) {
-            throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
-        }
         
         LoxClass.MethodClass methodClass = klass.getMethod(name);
+        if (methodClass == null) {
+            throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
+        }
         
         Environment closure = new Environment(methodClass.method.closure);
         closure.declare("this", this);
