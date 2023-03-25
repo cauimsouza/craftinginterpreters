@@ -71,10 +71,10 @@ class Parser {
         consume(TokenType.IDENTIFIER, "Expect identifier.");
         Token klass = previous();
         
-        Expr.SuperClass superClass = null;
+        Expr.Variable superClass = null;
         if (match(TokenType.LESS)) {
-            consume(TokenType.IDENTIFIER, "Expect identifier.");
-            superClass = new Expr.SuperClass(previous());
+            consume(TokenType.IDENTIFIER, "Expect superclass name.");
+            superClass = new Expr.Variable(previous());
         }
             
         consume(TokenType.LEFT_BRACE, "Expect '{' after class name.");

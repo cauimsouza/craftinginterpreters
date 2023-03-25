@@ -77,8 +77,10 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         LoxClass superClass = null;
         if (stmt.superClass != null) {
             Object o = eval(stmt.superClass);
-            if (!(o instanceof LoxClass))
+            if (!(o instanceof LoxClass)) {
                 throw new RuntimeError(stmt.superClass.name, "Can only inherit from class.");
+            }
+            
             superClass = (LoxClass) o;
         }
         
@@ -158,11 +160,6 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         }
         
         return object.toString();
-    }
-    
-    @Override
-    public Object visitSuperClassExpr(Expr.SuperClass expr) {
-        return resolve(expr).get(expr.name);
     }
     
     @Override

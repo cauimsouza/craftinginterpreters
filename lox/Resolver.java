@@ -54,13 +54,20 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     
     @Override
     public Void visitClassDeclStmt(Stmt.ClassDeclStmt classStmt) {
-        if (classStmt.superClass != null) resolve(classStmt.superClass);
-        
         ClassType old = currentClass;
         currentClass = ClassType.CLASS;
         
         declare(classStmt.name);
         define(classStmt.name);
+        
+        if (classStmt.superClass != null &&
+            classStmt.superClass.name.lexeme.equals(classStmt.name.lexeme)) {
+            Lox.error(classStmt.superClass.name, "A class can't inherit from itself.");
+        }
+        if (classStmt.superClass != null) {
+            resolve(classStmt.superClass);
+        }
+        
         
         beginScope();
         scopes.peek().put("this", new Access(new Token(TokenType.THIS, "this", null, 0)));
@@ -124,12 +131,6 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     public Void visitThisExpr(Expr.This expr) {
         if (currentClass == ClassType.NONE) Lox.error(expr.token, "'this' outside any class declaration.");
         resolveLocal(expr, expr.token);
-        return null;
-    }
-    
-    @Override
-    public Void visitSuperClassExpr(Expr.SuperClass expr) {
-        resolveLocal(expr, expr.name);
         return null;
     }
     
