@@ -51,7 +51,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
                 }
                 LoxList list = (LoxList) obj;
                 
-                return list.len();
+                return (double) list.len();
             }
             
             @Override
