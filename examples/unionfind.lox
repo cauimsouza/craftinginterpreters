@@ -1,0 +1,55 @@
+class UnionFind {
+    init(size) {
+        this.p = [];
+        for (var i = 0; i < size; i++) {
+            append(this.p, i);
+        }
+        
+        this.rank = [];
+        for (var i = 0; i < size; i++) {
+            append(this.rank, 0);
+        }
+    }
+    
+    find(u) {
+        if (u == this.p[u]) {
+            return u;
+        }
+        
+        return this.p[u] = this.find(this.p[u]);
+    }
+    
+    union(u, v) {
+        u = this.find(u), v = this.find(v);
+        
+        if (u == v) {
+            return;
+        }
+        
+        if (this.rank[u] > this.rank[v]) {
+            this.p[v] = u;
+            return;
+        }
+        
+        this.p[u] = v;
+        if (this.rank[u] == this.rank[v]) {
+            this.rank[v]++;
+        }
+    } 
+}
+
+var size = 10;
+var uf = UnionFind(size);
+
+for (var i = 0; i < size; i++) {
+    print(uf.find(i));
+}
+
+uf.union(0, 1);
+uf.union(1, 2);
+uf.union(2, 3);
+
+print(uf.find(0) == uf.find(3));
+print(uf.find(1) == uf.find(3));
+print(uf.find(1) == uf.find(2));
+print(uf.find(1) == uf.find(9));
