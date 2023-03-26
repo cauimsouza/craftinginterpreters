@@ -32,12 +32,16 @@ class LoxList {
         return elements.set(index, value);
     }
     
-    void erase(Token token, int index) {
-        if (index >= len() || index < 0) {
-            throw new RuntimeError(token, String.format("Index %d out of bounds.", index));
+    Object pop() {
+        if (len() == 0) {
+            throw new RuntimeError("Can't pop from empty list.");
         }
         
+        int index = elements.size() - 1;
+        Object element = elements.get(index);
         elements.remove(index);
+        
+        return element;
     }
     
     static LoxList merge(LoxList a, LoxList b) {

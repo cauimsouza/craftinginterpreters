@@ -5,4 +5,9 @@ class RuntimeError extends RuntimeException {
     super(message);
     this.token = token;
   }
+  
+  RuntimeError(String message) {
+    super(message);
+    this.token = null;
+  }
 }

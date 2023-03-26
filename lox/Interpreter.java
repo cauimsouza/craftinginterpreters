@@ -39,6 +39,44 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
             @Override
             public String toString() { return "<native fn>"; }
         });
+        globals.declare("append", new LoxCallable() {
+            @Override
+            public int arity() { return 2; }
+            
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                Object obj = arguments.get(0);
+                if (!(obj instanceof LoxList)) {
+                   throw new RuntimeError("First argument to function 'call' must be a list."); 
+                }
+                LoxList list = (LoxList) obj;
+                
+                list.append(arguments.get(1));
+                
+                return null;
+            }
+            
+            @Override
+            public String toString() { return "<native fn>"; }
+        });
+        globals.declare("pop", new LoxCallable() {
+            @Override
+            public int arity() { return 1; }
+            
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                Object obj = arguments.get(0);
+                if (!(obj instanceof LoxList)) {
+                   throw new RuntimeError("First argument to function 'pop' must be a list."); 
+                }
+                LoxList list = (LoxList) obj;
+                
+                return list.pop();
+            }
+            
+            @Override
+            public String toString() { return "<native fn>"; }
+        });
     }
     
     public void interpret(List<Stmt> program) {

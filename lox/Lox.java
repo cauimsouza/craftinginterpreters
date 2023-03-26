@@ -86,8 +86,13 @@ public class Lox {
   }
   
   static void runtimeError(RuntimeError e) {
+    if (e.token != null) {
       System.err.println(e.getMessage() +
         "\nWhile evaluation operation " + e.token.toString() + " at  [line " + e.token.line + "]");
-      hadRuntimeError = true;
+    } else {
+      System.err.println(e.getMessage());
+    }
+    
+    hadRuntimeError = true;
   }
 }
