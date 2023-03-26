@@ -285,6 +285,51 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
        return expr.expr.accept(this);
    }
    
+   @Override
+   public Object visitListExpr(Expr.ListExpr expr) {
+       List<Object> elements = new ArrayList<>();
+       for (Expr element : expr.elements) {
+           elements.add(element.accept(this));
+       }
+       return new LoxList(elements);
+   }
+   
+    @Override
+    public Object visitListAccess(Expr.ListAccess expr) {
+        Object listObject = expr.list.accept(this);
+        if (!(listObject instanceof LoxList)) {
+            throw new RuntimeError(expr.leftBracket, "Attempt to access element of non-list object");
+        }
+        LoxList list = (LoxList) listObject;
+        
+        Object indexObject = expr.index.accept(this);
+        if (!(indexObject instanceof Double)) {
+            throw new RuntimeError(expr.leftBracket, "List indices must be integers.");
+        }
+        int index = ((Double) indexObject).intValue();
+        
+        return list.get(expr.leftBracket, index);
+    }
+    
+    @Override
+    public Object visitListAssign(Expr.ListAssign expr) {
+        Object listObject = expr.list.accept(this);
+        if (!(listObject instanceof LoxList)) {
+            throw new RuntimeError(expr.leftBracket, "Attempt to access element of non-list object");
+        }
+        LoxList list = (LoxList) listObject;
+        
+        Object indexObject = expr.index.accept(this);
+        if (!(indexObject instanceof Double)) {
+            throw new RuntimeError(expr.leftBracket, "List indices must be integers.");
+        }
+        int index = ((Double) indexObject).intValue();
+        
+        Object value = expr.right.accept(this);
+        
+        return list.assign(expr.equal, index, value);
+    }
+   
     @Override
     public Object visitLiteralExpr(Expr.Literal expr) {
         return expr.value; 

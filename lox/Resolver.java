@@ -179,6 +179,29 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     
     @Override
+    public Void visitListExpr(Expr.ListExpr list) {
+        for (Expr expr : list.elements) {
+            resolve(expr);
+        }
+        return null;
+    }
+    
+    @Override
+    public Void visitListAccess(Expr.ListAccess listAccess) {
+        resolve(listAccess.list);
+        resolve(listAccess.index);
+        return null;
+    }
+    
+    @Override
+    public Void visitListAssign(Expr.ListAssign listAssign) {
+        resolve(listAssign.list);
+        resolve(listAssign.index);
+        resolve(listAssign.right);
+        return null;
+    }
+    
+    @Override
     public Void visitLiteralExpr(Expr.Literal literal) {
         return null;
     }

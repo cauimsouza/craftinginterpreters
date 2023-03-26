@@ -8,6 +8,9 @@ abstract class Expr {
     R visitBinaryExpr(Binary expr);
     R visitTernaryExpr(Ternary expr);
     R visitGroupingExpr(Grouping expr);
+    R visitListExpr(ListExpr expr);
+    R visitListAccess(ListAccess expr);
+    R visitListAssign(ListAssign expr);
     R visitLiteralExpr(Literal expr);
     R visitVariableExpr(Variable expr);
     R visitAssignExpr(Assign expr);
@@ -107,6 +110,57 @@ abstract class Expr {
     }
 
     final Expr expr;
+  }
+  
+  static class ListExpr extends Expr {
+    ListExpr(List<Expr> elements) {
+      this.elements = elements;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitListExpr(this);
+    }
+
+    final List<Expr> elements;
+  }
+  
+  static class ListAccess extends Expr {
+    ListAccess(Expr list, Token leftBracket, Expr index) {
+      this.list = list;
+      this.leftBracket = leftBracket;
+      this.index = index;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitListAccess(this);
+    }
+
+    final Expr list;
+    final Token leftBracket;
+    final Expr index;
+  }
+  
+  static class ListAssign extends Expr {
+    ListAssign(Expr list, Token leftBracket, Expr index, Token equal, Expr right) {
+      this.list = list;
+      this.leftBracket = leftBracket;
+      this.index = index;
+      this.equal = equal;
+      this.right = right;
+    }
+
+    @Override
+    <R> R accept(Visitor<R> visitor) {
+      return visitor.visitListAssign(this);
+    }
+
+    final Expr list;
+    final Token leftBracket;
+    final Expr index;
+    final Token equal;
+    final Expr right;
   }
   
   static class Literal extends Expr {

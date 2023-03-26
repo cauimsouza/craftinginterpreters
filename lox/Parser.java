@@ -270,7 +270,7 @@ class Parser {
       Expr expr = ternary();
       
       if (match(TokenType.EQUAL)) {
-          Token t = previous();
+          Token equalToken = previous();
           Expr right = assignment();
           if (expr instanceof Expr.Variable) {
             return new Expr.Assign(((Expr.Variable) expr).name, right);
@@ -279,7 +279,15 @@ class Parser {
             Expr.Access a = (Expr.Access) expr;
             return new Expr.FieldAssign(a.expr, a.field, right);
           }
-          throw error(t, "Invalid assignment target.");
+          if (expr instanceof Expr.ListAccess) {
+              Expr.ListAccess listAccess = (Expr.ListAccess) expr;
+              return new Expr.ListAssign(listAccess.list,
+                                         listAccess.leftBracket,
+                                         listAccess.index,
+                                         equalToken,
+                                         right);
+          }
+          throw error(equalToken, "Invalid assignment target.");
       }
       
       return expr;
@@ -410,20 +418,34 @@ class Parser {
         // arguments -> assignment ("," assignment)* It can be any expression with higher precedence than sequence
         Expr expr = primary();
         
-        while (peek().type == TokenType.LEFT_PAREN || peek().type == TokenType.DOT) {
-            TokenType t = peek().type;
-            if (t == TokenType.LEFT_PAREN) {
+        while (true) {
+            if (check(TokenType.LEFT_PAREN)) {
                 Token paren = advance();
                 List<Expr> args = arguments(); 
                 consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
                 expr = new Expr.Call(expr, paren, args);
-            } else {
+                continue;
+            }
+            
+            if (check(TokenType.DOT)) {
                 advance(); 
                 consume(TokenType.IDENTIFIER, "Expect identifier after period."); 
                 Token field = previous();
                 expr = new Expr.Access(expr, field);
+                continue;
             }
+            
+            if (check(TokenType.LEFT_BRACKET)) {
+                Token leftBracket = advance();
+                Expr index = assignment();
+                consume(TokenType.RIGHT_BRACKET, "Expect ']' after index expression.");
+                expr = new Expr.ListAccess(expr, leftBracket, index);
+                continue;
+            }
+            
+            break;
         }
+        
         return expr;
     }
     
@@ -474,11 +496,34 @@ class Parser {
             return new Expr.Grouping(expr);
         }
         
+        if (match(TokenType.LEFT_BRACKET)) {
+            List<Expr> listElements = list();
+            consume(TokenType.RIGHT_BRACKET, "Expect ']' after list elements.");
+            return new Expr.ListExpr(listElements);
+        }
+        
         if (match(TokenType.FUN)) {
             return lambdaExpr();
         }
         
         throw error(peek(), "Expect expression.");
+    }
+    
+    private List<Expr> list() {
+        List<Expr> elements = new ArrayList<>(); 
+        
+        boolean firstElement = true;
+        while (!isAtEnd() && !check(TokenType.RIGHT_BRACKET)) {
+            if (!firstElement) {
+                consume(TokenType.COMMA, "Expect ',' between list elements."); 
+            }
+            firstElement = false;
+            
+            Expr element = assignment(); 
+            elements.add(element);
+        }
+        
+        return elements;
     }
     
     private Expr lambdaExpr() {
@@ -493,7 +538,6 @@ class Parser {
         
         return new Expr.Lambda(params, body);
     }
-    
   
   private void consume(TokenType type, String message) {
      if (match(type)) return; 
@@ -538,7 +582,6 @@ class Parser {
   }
   
   private boolean check(TokenType type) {
-    if (isAtEnd()) return false;
     return peek().type == type;
   }
   
