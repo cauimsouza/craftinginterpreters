@@ -255,8 +255,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
                     return LoxList.merge((LoxList) left, (LoxList) right);
                 }
                 throw new RuntimeError(expr.operator, "Both operands must be numbers, or one of them must be a string.");
+            case PLUS_PLUS:
+                checkNumberOperand(expr.operator, left);
+                return (double) left + (double) right;
             case MINUS:
                 checkNumbersOperand(expr.operator, left, right);
+                return (double) left - (double) right;
+            case MINUS_MINUS:
+                checkNumberOperand(expr.operator, left);
                 return (double) left - (double) right;
             case SLASH:
                 checkNumbersOperand(expr.operator, left, right);

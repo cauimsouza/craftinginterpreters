@@ -152,8 +152,9 @@ class Parser {
         if (match(TokenType.RETURN)) return returnStmt();
         
         // If the next token doesn't look like any known kind of statement,
-        // we assume it's an expression.
+        // we assume it's an expression or an increment/decrement.
         Expr expr = expression();
+        
         consume(TokenType.SEMICOLON, "Expect semicolon.");
         return new Stmt.ExprStmt(expr);
     }
@@ -404,7 +405,7 @@ class Parser {
          }
      }
      
-     Expr expr = call();
+     Expr expr = increment();
      
      for (int i = ops.size() - 1; i >= 0; i--) {
          expr = new Expr.Unary(ops.get(i), expr);
@@ -412,6 +413,36 @@ class Parser {
      
      return expr;
   }
+  
+    private Expr increment() {
+        Expr expr = call();
+        
+        if (match(TokenType.PLUS_PLUS, TokenType.MINUS_MINUS)) {
+            Token operator = previous();
+            
+            Expr one = new Expr.Literal(1.0);
+            Expr right = new Expr.Binary(expr, operator, one);
+            if (expr instanceof Expr.Variable) {
+                return new Expr.Assign(((Expr.Variable) expr).name, right);
+            }
+            if (expr instanceof Expr.Access) {
+                Expr.Access a = (Expr.Access) expr;
+                return new Expr.FieldAssign(a.expr, a.field, right);
+            }
+            if (expr instanceof Expr.ListAccess) {
+                Expr.ListAccess listAccess = (Expr.ListAccess) expr;
+                return new Expr.ListAssign(listAccess.list,
+                                         listAccess.leftBracket,
+                                         listAccess.index,
+                                         operator,
+                                         right);
+            }
+            
+            throw error(operator, "Can only increment variables, fields, and list elements.");
+        }
+        
+        return expr;
+    }
     
     private Expr call() {
         // primary -> primary (arguments?)*

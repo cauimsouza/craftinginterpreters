@@ -9,6 +9,7 @@ enum TokenType {
     EQUAL, EQUAL_EQUAL,
     GREATER, GREATER_EQUAL,
     LESS, LESS_EQUAL,
+    PLUS_PLUS, MINUS_MINUS,
     
     // Literals.
     IDENTIFIER, STRING, NUMBER,

@@ -64,8 +64,6 @@ class Scanner {
         case ']':  addToken(TokenType.RIGHT_BRACKET); break;
         case ',':  addToken(TokenType.COMMA); break;
         case '.':  addToken(TokenType.DOT); break;
-        case '-':  addToken(TokenType.MINUS); break;
-        case '+':  addToken(TokenType.PLUS); break;
         case ';':  addToken(TokenType.SEMICOLON); break;
         case '*':  addToken(TokenType.STAR); break;
         case '?':  addToken(TokenType.QUESTION); break;
@@ -92,6 +90,22 @@ class Scanner {
                }
                line += newLines;
             } else addToken(TokenType.SLASH);
+            break;
+        case '+':
+            if (nextIs('+')) {
+                current++;
+                addToken(TokenType.PLUS_PLUS);
+            } else {
+                addToken(TokenType.PLUS);
+            }
+            break;
+        case '-':
+            if (nextIs('-')) {
+                current++;
+                addToken(TokenType.MINUS_MINUS);
+            } else {
+                addToken(TokenType.MINUS);
+            }
             break;
         case '!':
             if (nextIs('=')) {
