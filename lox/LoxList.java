@@ -40,6 +40,20 @@ class LoxList {
         elements.remove(index);
     }
     
+    static LoxList merge(LoxList a, LoxList b) {
+        List<Object> elements = new ArrayList<>();
+        
+        for (Object obj : a.elements) {
+            elements.add(obj);
+        }
+        
+        for (Object obj : b.elements) {
+            elements.add(obj);
+        }
+        
+        return new LoxList(elements);
+    }
+    
     @Override
     public String toString() {
         String s = "[";

@@ -207,10 +207,15 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
        
        switch (expr.operator.type) {
             case PLUS:
-                if (left instanceof Double && right instanceof Double)
+                if (left instanceof Double && right instanceof Double) {
                     return (double) left + (double) right;
-                if (left instanceof String || right instanceof String)
+                }
+                if (left instanceof String || right instanceof String) {
                     return stringify(left) + stringify(right);
+                }
+                if (left instanceof LoxList && right instanceof LoxList) {
+                    return LoxList.merge((LoxList) left, (LoxList) right);
+                }
                 throw new RuntimeError(expr.operator, "Both operands must be numbers, or one of them must be a string.");
             case MINUS:
                 checkNumbersOperand(expr.operator, left, right);
