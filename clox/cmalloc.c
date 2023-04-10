@@ -9,11 +9,10 @@ $ LD_PRELOAD=./cmalloc.so ./a.out
 */
 
 #include <unistd.h>
-#include <stdio.h>
 
 #define HSIZE 4
 #define WSIZE 8
-#define INCSIZE (1 << 12) // 4 kB
+#define GROWSIZE (1 << 12) // 4 kB
 #define MIN_BLOCK_SIZE 16
 
 #define PACK(size, alloc) ((size) | (alloc))
@@ -41,7 +40,7 @@ int init() {
     }
     __init = 1;
     
-    char *bp = (char *) sbrk(INCSIZE);
+    char *bp = (char *) sbrk(GROWSIZE);
     if (bp == (void *) -1) {
         return 1;
     }
@@ -53,8 +52,8 @@ int init() {
     prologuep = bp;
     
     bp = NEXT_BLK(bp);
-    PUT(HDRP(bp), PACK(INCSIZE - 2 * WSIZE, 0));
-    PUT(FTRP(bp), PACK(INCSIZE - 2 * WSIZE, 0));
+    PUT(HDRP(bp), PACK(GROWSIZE - 2 * WSIZE, 0));
+    PUT(FTRP(bp), PACK(GROWSIZE - 2 * WSIZE, 0));
     
     // Epilogue
     bp = NEXT_BLK(bp);
@@ -65,8 +64,7 @@ int init() {
 }
 
 char* find_fit(size_t asize) {
-    char *bp;
-    for (bp = prologuep; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLK(bp)) {
+    for (char *bp = prologuep; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLK(bp)) {
         if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize) {
             return bp;
         }
@@ -75,12 +73,12 @@ char* find_fit(size_t asize) {
 }
 
 void coallesce_with_next(char *bp) {
-    size_t s = GET_SIZE(HDRP(bp)) + GET_SIZE(HDRP(NEXT_BLK(bp)));
-    PUT(HDRP(bp), PACK(s, 0));
-    PUT(FTRP(bp), PACK(s, 0));
+    size_t aggreg_size = GET_SIZE(HDRP(bp)) + GET_SIZE(HDRP(NEXT_BLK(bp)));
+    PUT(HDRP(bp), PACK(aggreg_size, 0));
+    PUT(FTRP(bp), PACK(aggreg_size, 0));
 }
 
-char* coallesce(char *bp) {
+char *coallesce(char *bp) {
     char *nextp = NEXT_BLK(bp);
     if (!GET_ALLOC(HDRP(nextp))) {
         coallesce_with_next(bp);
@@ -95,8 +93,8 @@ char* coallesce(char *bp) {
     return bp;
 }
 
-void* grow_heap(size_t asize) {
-    size_t msize = MAX(asize, INCSIZE);
+void *grow_heap(size_t asize) {
+    size_t msize = MAX(asize, GROWSIZE);
     
     char *bp = (char *) sbrk(msize);
     if (bp == (void *) -1) {
