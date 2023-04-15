@@ -1,24 +1,237 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "common.h"
 #include "compiler.h"
 #include "scanner.h"
 
-void compile(const char *source) {
-  initScanner(source);
-  int line = -1;
-  for (;;) {
-      Token token = scanToken();
-      if (token.line != line) {
-          printf("%4d ", token.line);
-          line = token.line;
-      } else {
-          printf("   | ");
-      }
-      printf("%2d '%.*s'\n", token.type, token.length, token.start);
-      
-      if (token.type == TOKEN_EOF) {
-          break;
-      }
+#ifdef DEBUG_PRINT_CODE
+#include "debug.h"
+#endif
+
+typedef struct {
+  Token previous;
+  Token current;
+  bool had_error;
+  bool panic_mode;
+} Parser;
+
+typedef enum {
+  PREC_NONE,
+  PREC_ASSIGNMENT,
+  PREC_OR,
+  PREC_AND,
+  PREC_EQUALITY,
+  PREC_COMPARISON,
+  PREC_TERM,
+  PREC_FACTOR,
+  PREC_UNARY,
+  PREC_CALL,
+  PREC_PRIMARY
+} Precedence;
+
+typedef void (*ParseFn)();
+
+typedef struct {
+  ParseFn prefix;
+  ParseFn infix;
+  Precedence precedence;
+} ParseRule;
+
+Parser parser;
+Chunk *compilingChunk;
+
+Precedence nextPrecedence(Precedence precedence) {
+  return (Precedence) (precedence + 1); 
+}
+
+static void errorAt(Token *token, const char *message) {
+  if (parser.panic_mode) {
+    return;
   }
+  
+  parser.panic_mode = true;
+  fprintf(stderr, "[line %d] Error", token->line);
+  
+  if (token->type == TOKEN_EOF) {
+    fprintf(stderr, " at end");
+  } else if (token->type != TOKEN_ERROR) {
+    fprintf(stderr, " at '%.*s'", token->length, token->start);
+  }
+  
+  fprintf(stderr, ": %s\n", message);
+  parser.had_error = true;
+}
+
+static void error(const char *message) {
+  errorAt(&parser.previous, message);
+}
+
+static void errorAtCurrent(const char *message) {
+  errorAt(&parser.current, message); 
+}
+
+static void advance() {
+  parser.previous = parser.current;
+  
+  for (;;) {
+    parser.current = scanToken();
+    
+    if (parser.current.type != TOKEN_ERROR) {
+      break;
+    }
+    
+    errorAtCurrent(parser.current.start);
+  }
+}
+
+static void consume(TokenType type, const char *message) {
+  if (parser.current.type == type) {
+    advance();
+    return;
+  }
+  errorAtCurrent(message);
+}
+
+static void emitByte(uint8_t byte) {
+  writeChunk(compilingChunk, byte, parser.previous.line);
+}
+
+static void emitConstant(Value value) {
+  writeConstant(compilingChunk, value, parser.previous.line);
+}
+
+static ParseRule *getRule(TokenType token_type);
+
+static void parsePrecedence(Precedence precedence) {
+  advance();
+  
+  ParseFn prefix_rule = getRule(parser.previous.type)->prefix;
+  if (prefix_rule == NULL) {
+    error("Expect expression.");
+    return;
+  }
+  
+  prefix_rule();
+  
+  while (precedence <= getRule(parser.current.type)->precedence) {
+    advance();
+    ParseFn infix_rule = getRule(parser.previous.type)->infix;
+    infix_rule();
+  }
+}
+
+static void expression() {
+  parsePrecedence(PREC_ASSIGNMENT);
+}
+
+static void number() {
+  double value = strtod(parser.previous.start, NULL);
+  emitConstant(value);
+}
+
+static void grouping() {
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
+}
+
+static void unary() {
+  TokenType op = parser.previous.type;
+  
+  parsePrecedence(PREC_UNARY);
+  
+  switch (op) {
+    case TOKEN_MINUS:
+      emitByte(OP_NEGATE);
+      break;
+  }
+}
+
+static void binary() {
+  TokenType op_type = parser.previous.type;
+  
+  ParseRule *rule = getRule(op_type);
+  parsePrecedence(nextPrecedence(rule->precedence));
+  
+  switch (op_type) {
+    case TOKEN_PLUS:
+      emitByte(OP_ADD);
+      break;
+    case TOKEN_MINUS:
+      emitByte(OP_SUBTRACT);
+      break;
+    case TOKEN_STAR:
+      emitByte(OP_MULTIPLY);
+      break;
+    case TOKEN_SLASH:
+      emitByte(OP_DIVIDE);
+      break;
+  }
+}
+
+ParseRule rules[] = {
+  [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
+  [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
+  [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
+  [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
+  [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
+  [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
+  [TOKEN_BANG]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_BANG_EQUAL]    = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_EQUAL_EQUAL]   = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_GREATER]       = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_GREATER_EQUAL] = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_LESS]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_LESS_EQUAL]    = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
+  [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FALSE]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_NIL]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_TRUE]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
+};
+
+static ParseRule *getRule(TokenType token_type) {
+  return &rules[token_type];
+}
+
+bool compile(const char *source, Chunk *chunk) {
+  initScanner(source);
+  parser.had_error = false;
+  parser.panic_mode = false;
+  compilingChunk = chunk;
+  
+  advance();
+  expression();
+  consume(TOKEN_EOF, "Expect end of expression.");
+  emitByte(OP_RETURN);
+  
+  #ifdef DEBUG_PRINT_CODE
+  if (!parser.had_error) {
+    disassembleChunk(compilingChunk, "code");
+  }
+  #endif
+  
+  return !parser.had_error;
 }
