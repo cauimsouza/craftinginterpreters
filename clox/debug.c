@@ -3,20 +3,12 @@
 #include "debug.h"
 #include "value.h"
 
-void disassembleChunk(Chunk* chunk, const char* name) {
-    printf("== %s ==\n", name);
-    
-    for (int offset = 0; offset < chunk->count;) {
-        offset = disassembleInstruction(chunk, offset);     
-    }
-}
-
-int simpleInstruction(const char* name, int offset) {
+static int simpleInstruction(const char* name, int offset) {
     printf("%s\n", name);
     return offset + 1;
 }
 
-int constantInstruction(const char* name, Chunk* chunk, int offset) {
+static int constantInstruction(const char* name, Chunk* chunk, int offset) {
     uint8_t constant = chunk->code[offset + 1];
     printf("%-16s %8d '", name, constant);
     printValue(chunk->constants.values[constant]);
@@ -25,7 +17,7 @@ int constantInstruction(const char* name, Chunk* chunk, int offset) {
     return offset + 2;
 }
 
-int constantLongInstruction(const char* name, Chunk* chunk, int offset) {
+static int constantLongInstruction(const char* name, Chunk* chunk, int offset) {
     int constant = 0;
     for (int i = 0; i < 3; i++) {
         constant += chunk->code[offset + 1 + i] * (1 << (8 * i));
@@ -53,8 +45,32 @@ int disassembleInstruction(Chunk* chunk, int offset) {
             return constantInstruction("OP_CONSTANT", chunk, offset);
         case OP_CONSTANT_LONG:
             return constantLongInstruction("OP_CONSTANT_LONG", chunk, offset);
+        case OP_NIL:
+            return simpleInstruction("OP_NIL", offset);
+        case OP_TRUE:
+            return simpleInstruction("OP_TRUE", offset);
+        case OP_FALSE:
+            return simpleInstruction("OP_FALSE", offset);
         case OP_NEGATE:
             return simpleInstruction("OP_NEGATE", offset);
+        case OP_NOT:
+            return simpleInstruction("OP_NOT", offset);
+        case OP_OR:
+            return simpleInstruction("OP_OR", offset);
+        case OP_AND:
+            return simpleInstruction("OP_AND", offset);
+        case OP_EQ:
+            return simpleInstruction("OP_EQ", offset);
+        case OP_NEQ:
+            return simpleInstruction("OP_NEQ", offset);
+        case OP_LESS:
+            return simpleInstruction("OP_LESS", offset);
+        case OP_LESS_EQ:
+            return simpleInstruction("OP_LESS_EQ", offset);
+        case OP_GREATER:
+            return simpleInstruction("OP_GREATER", offset);
+        case OP_GREATER_EQ:
+            return simpleInstruction("OP_GREATER_EQ", offset);
         case OP_ADD:
             return simpleInstruction("OP_ADD", offset);
         case OP_SUBTRACT:
@@ -68,5 +84,13 @@ int disassembleInstruction(Chunk* chunk, int offset) {
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
+    }
+}
+
+void disassembleChunk(Chunk* chunk, const char* name) {
+    printf("== %s ==\n", name);
+    
+    for (int offset = 0; offset < chunk->count;) {
+        offset = disassembleInstruction(chunk, offset);     
     }
 }
