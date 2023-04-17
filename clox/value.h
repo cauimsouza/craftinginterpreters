@@ -2,11 +2,13 @@
 #define clox_value_h
 
 #include "common.h"
+#include "object.h"
 
 typedef enum {
     VAL_BOOL,
     VAL_NIL,
-    VAL_NUMBER
+    VAL_NUMBER,
+    VAL_OBJ
 } ValueType;
 
 typedef struct {
@@ -14,17 +16,21 @@ typedef struct {
     union {
         bool boolean;
         double number;
+        Obj *obj;
     } as;
 } Value;
 
 Value fromBoolean(bool boolean);
 Value fromDouble(double number);
 Value fromNil();
+Value fromObj(Obj *obj);
 bool isBoolean(Value value);
 bool isNumber(Value value);
 bool isNil(Value value);
+bool isObj(Value value);
+bool isString(Value value);
 bool isTruthy(Value value);
-bool equals(Value a, Value b);
+bool valuesEqual(Value a, Value b);
 void printValue(Value value);
 
 typedef struct {

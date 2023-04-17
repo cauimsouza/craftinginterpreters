@@ -3,6 +3,7 @@
 #include "compiler.h"
 #include "common.h"
 #include "debug.h"
+#include "value.h"
 #include "vm.h"
 
 VM vm; 
@@ -13,9 +14,16 @@ static void resetStack() {
 
 void initVM() {
     resetStack();
+    vm.objects = NULL;
 }
 
 void freeVM() {
+    Obj *obj = vm.objects;
+    while (obj != NULL) {
+        Obj *next = obj->next;
+        freeObj(obj);
+        obj = next;
+    }
 }
 
 void push(Value value) {
@@ -28,6 +36,10 @@ Value pop() {
     return *vm.stackTop;
 }
 
+static Value peek(int index) {
+    return *(vm.stackTop - index - 1);
+}
+
 static void runtimeError(const char *message) {
     fprintf(stderr, message);
     
@@ -35,6 +47,13 @@ static void runtimeError(const char *message) {
     int line = getLine(vm.chunk, instruction_offset);
     fprintf(stderr, "\n[line %d] in script\n", line);
     resetStack();
+}
+
+static void concatenate() {
+    ObjString *right_str = TO_STRING(pop());
+    ObjString *left_str = TO_STRING(pop());
+    Obj *sum = addStrings(left_str, right_str);
+    push(fromObj(sum));
 }
 
 static InterpretResult run() {
@@ -113,10 +132,10 @@ static InterpretResult run() {
                 EXEC_LOG_BIN_OP(&&);
                 break;
             case OP_EQ:
-                push(fromBoolean(equals(pop(), pop())));
+                push(fromBoolean(valuesEqual(pop(), pop())));
                 break;
             case OP_NEQ:
-                push(fromBoolean(!equals(pop(), pop())));
+                push(fromBoolean(!valuesEqual(pop(), pop())));
                 break;
             case OP_LESS:
                 EXEC_NUM_BIN_OP(<, fromBoolean);
@@ -131,8 +150,16 @@ static InterpretResult run() {
                 EXEC_NUM_BIN_OP(>=, fromBoolean);
                 break;
             case OP_ADD:
-                EXEC_NUM_BIN_OP(+, fromDouble);
-                break;
+                if (isString(peek(0)) && isString(peek(1))) {
+                    concatenate();
+                    break;
+                }
+                if (isNumber(peek(0)) && isNumber(peek(1))) {
+                   push(fromDouble(pop().as.number + pop().as.number));
+                   break;
+                }
+                runtimeError("Operands must be two strings or two numbers.");
+                return INTERPRET_RUNTIME_ERROR;
             case OP_SUBTRACT:
                 EXEC_NUM_BIN_OP(-, fromDouble);
                 break;

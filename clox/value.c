@@ -24,6 +24,13 @@ Value fromNil() {
     };
 }
 
+Value fromObj(Obj *obj) {
+    return (Value) {
+        .type = VAL_OBJ,
+        .as.obj = obj
+    };
+}
+
 bool isBoolean(Value value) {
     return value.type == VAL_BOOL;
 }
@@ -36,15 +43,24 @@ bool isNil(Value value) {
     return value.type == VAL_NIL;
 }
 
+bool isObj(Value value) {
+    return value.type == VAL_OBJ;
+}
+
+bool isString(Value value) {
+    return value.type == VAL_OBJ && value.as.obj->type == OBJ_STRING;
+}
+
 bool isTruthy(Value value) {
     return !(isNil(value) || isBoolean(value) && !value.as.boolean);
 }
 
-bool equals(Value a, Value b) {
+bool valuesEqual(Value a, Value b) {
     return
         isBoolean(a) && isBoolean(b) && a.as.boolean == b.as.boolean ||
         isNil(a) && isNil(b) ||
-        isNumber(a) && isNumber(b) && a.as.number == b.as.number;
+        isNumber(a) && isNumber(b) && a.as.number == b.as.number ||
+        isObj(a) && isObj(b) && objsEqual(a.as.obj, b.as.obj);
 }
 
 void printValue(Value value) {
@@ -52,8 +68,10 @@ void printValue(Value value) {
         printf("%s", value.as.boolean ? "true" : "false");
     } else if (isNil(value)) {
         printf("nil");
-    } else {
+    } else if (isNumber(value)) {
         printf("%g", value.as.number);
+    } else {
+        printObj(value.as.obj);
     }
 }
 

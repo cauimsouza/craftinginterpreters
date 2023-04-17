@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "compiler.h"
+#include "memory.h"
 #include "scanner.h"
 #include "value.h"
 
@@ -144,6 +145,19 @@ static void boolean() {
   emitBoolean(parser.previous.type == TOKEN_TRUE);
 }
 
+static void string() {
+  size_t length = parser.previous.length - 2;
+  const char *chars = parser.previous.start + 1;
+  
+  char *copied = ALLOCATE(char, length + 1);
+  for (size_t i = 0; i < length; i++) {
+    copied[i] = chars[i];
+  }
+  copied[length] = '\0';
+  
+  emitConstant(fromObj(fromString(length, copied))); 
+}
+
 static void grouping() {
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
@@ -231,7 +245,7 @@ ParseRule rules[] = {
   [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     binary, PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
