@@ -19,7 +19,7 @@ Obj *fromString(const char *chars, size_t length) {
     return (Obj*) obj;
 }
 
-Obj *addStrings(ObjString *left_str, ObjString *right_str) {
+Obj *addStrings(const ObjString *left_str, const ObjString *right_str) {
     size_t length = left_str->length + right_str ->length;
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
@@ -37,7 +37,7 @@ Obj *addStrings(ObjString *left_str, ObjString *right_str) {
     return (Obj*) obj;
 }
 
-bool objsEqual(Obj *a, Obj *b) {
+bool objsEqual(const Obj *a, const Obj *b) {
     if (a->type != b->type) {
         return false;
     }
@@ -56,7 +56,7 @@ void freeObj(Obj *obj) {
     }
 }
 
-void printObj(Obj *obj) {
+void printObj(const Obj *obj) {
     if (obj->type == OBJ_STRING) {
         ObjString *objs = (ObjString*) obj;
         printf("%s", objs->chars);

@@ -24,9 +24,9 @@ typedef struct {
 } ObjString;
 
 Obj *fromString(const char *chars, size_t length);
-Obj *addStrings(ObjString *left_str, ObjString *right_str);
-bool objsEqual(Obj *a, Obj *b);
+Obj *addStrings(const ObjString *left_str, const ObjString *right_str);
+bool objsEqual(const Obj *a, const Obj *b);
 void freeObj(Obj *obj);
-void printObj(Obj *obj);
+void printObj(const Obj *obj);
 
 #endif
