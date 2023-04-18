@@ -13,7 +13,7 @@ typedef struct {
 
 Scanner scanner;
 
-void initScanner(const char *source) {
+void InitScanner(const char *source) {
     scanner.start = source;
     scanner.current = source;
     scanner.line = 1;
@@ -199,7 +199,7 @@ static void skipSpace(char c) {
     }
 }
 
-Token scanToken() {
+Token ScanToken() {
     scanner.start = scanner.current;
     
     if (isAtEnd()) {
@@ -229,11 +229,11 @@ Token scanToken() {
         case '/':
             if (match('/')) {
                 skipSingleLineComment();
-                return scanToken();
+                return ScanToken();
             }
             if (match('*')) {
                 if (skipMultiLineComment()) {
-                    return scanToken();
+                    return ScanToken();
                 }
                 return errorToken("Non-terminated multi-line comment.");
             }
@@ -265,7 +265,7 @@ Token scanToken() {
         default:
             if (isspace(c)) {
                 skipSpace(c);
-                return scanToken();
+                return ScanToken();
             }
             if (isAlpha(c)) {
                 return scanIdentifierOrKeyword();

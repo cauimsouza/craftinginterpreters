@@ -20,18 +20,18 @@ typedef struct {
     } as;
 } Value;
 
-Value fromBoolean(bool boolean);
-Value fromDouble(double number);
-Value fromNil();
-Value fromObj(Obj *obj);
-bool isBoolean(Value value);
-bool isNumber(Value value);
-bool isNil(Value value);
-bool isObj(Value value);
-bool isString(Value value);
-bool isTruthy(Value value);
-bool valuesEqual(Value a, Value b);
-void printValue(Value value);
+Value FromBoolean(bool boolean);
+Value FromDouble(double number);
+Value FromNil();
+Value FromObj(Obj *obj);
+bool IsBoolean(Value value);
+bool IsNumber(Value value);
+bool IsNil(Value value);
+bool IsObj(Value value);
+bool IsString(Value value);
+bool IsTruthy(Value value);
+bool ValuesEqual(Value a, Value b);
+void PrintValue(Value value);
 
 typedef struct {
     int capacity;
@@ -39,8 +39,8 @@ typedef struct {
     Value* values;
 } ValueArray;
 
-void initValueArray(ValueArray* array);
-void writeValueArray(ValueArray* array, Value value);
-void freeValueArray(ValueArray* array);
+void InitValueArray(ValueArray* array);
+void WriteValueArray(ValueArray* array, Value value);
+void FreeValueArray(ValueArray* array);
 
 #endif

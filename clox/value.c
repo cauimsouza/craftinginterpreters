@@ -4,84 +4,84 @@
 #include "value.h"
 #include "memory.h"
 
-Value fromBoolean(bool boolean) {
+Value FromBoolean(bool boolean) {
     return (Value) {
         .type = VAL_BOOL,
         .as.boolean = boolean
     };
 }
 
-Value fromDouble(double number) {
+Value FromDouble(double number) {
     return (Value) {
         .type = VAL_NUMBER,
         .as.number = number
     };
 }
 
-Value fromNil() {
+Value FromNil() {
     return (Value) {
         .type = VAL_NIL
     };
 }
 
-Value fromObj(Obj *obj) {
+Value FromObj(Obj *obj) {
     return (Value) {
         .type = VAL_OBJ,
         .as.obj = obj
     };
 }
 
-bool isBoolean(Value value) {
+bool IsBoolean(Value value) {
     return value.type == VAL_BOOL;
 }
 
-bool isNumber(Value value) {
+bool IsNumber(Value value) {
     return value.type == VAL_NUMBER;
 }
 
-bool isNil(Value value) {
+bool IsNil(Value value) {
     return value.type == VAL_NIL;
 }
 
-bool isObj(Value value) {
+bool IsObj(Value value) {
     return value.type == VAL_OBJ;
 }
 
-bool isString(Value value) {
+bool IsString(Value value) {
     return value.type == VAL_OBJ && value.as.obj->type == OBJ_STRING;
 }
 
-bool isTruthy(Value value) {
-    return !(isNil(value) || isBoolean(value) && !value.as.boolean);
+bool IsTruthy(Value value) {
+    return !(IsNil(value) || IsBoolean(value) && !value.as.boolean);
 }
 
-bool valuesEqual(Value a, Value b) {
+bool ValuesEqual(Value a, Value b) {
     return
-        isBoolean(a) && isBoolean(b) && a.as.boolean == b.as.boolean ||
-        isNil(a) && isNil(b) ||
-        isNumber(a) && isNumber(b) && a.as.number == b.as.number ||
-        isObj(a) && isObj(b) && objsEqual(a.as.obj, b.as.obj);
+        IsBoolean(a) && IsBoolean(b) && a.as.boolean == b.as.boolean ||
+        IsNil(a) && IsNil(b) ||
+        IsNumber(a) && IsNumber(b) && a.as.number == b.as.number ||
+        IsObj(a) && IsObj(b) && ObjsEqual(a.as.obj, b.as.obj);
 }
 
-void printValue(Value value) {
-    if (isBoolean(value)) {
+void PrintValue(Value value) {
+    if (IsBoolean(value)) {
         printf("%s", value.as.boolean ? "true" : "false");
-    } else if (isNil(value)) {
+    } else if (IsNil(value)) {
         printf("nil");
-    } else if (isNumber(value)) {
+    } else if (IsNumber(value)) {
         printf("%g", value.as.number);
     } else {
-        printObj(value.as.obj);
+        PrintObj(value.as.obj);
     }
 }
 
-void initValueArray(ValueArray* array) {
+void InitValueArray(ValueArray* array) {
     array->count = 0;
     array->capacity = 0;
     array->values = NULL;
 }
 
-void writeValueArray(ValueArray* array, Value value) {
+void WriteValueArray(ValueArray* array, Value value) {
     if (array->count == array->capacity) {
         array->capacity = GROW_CAPACITY(array->capacity);
         array->values = GROW_ARRAY(Value, array->values, array->count, array->capacity);
@@ -91,7 +91,7 @@ void writeValueArray(ValueArray* array, Value value) {
     array->count++;
 }
 
-void freeValueArray(ValueArray* array) {
+void FreeValueArray(ValueArray* array) {
     FREE_ARRAY(Value, array->values, array->capacity);
-    initValueArray(array);
+    InitValueArray(array);
 }

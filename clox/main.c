@@ -19,7 +19,7 @@ static void repl() {
             break;
         }
         
-        interpret(line);
+        Interpret(line);
     }
 }
 
@@ -55,7 +55,7 @@ static char *readFile(const char *path) {
 
 static void runFile(const char *path) {
     char *source = readFile(path);
-    InterpretResult result = interpret(source);
+    InterpretResult result = Interpret(source);
     free(source);
     
     if (result == INTERPRET_COMPILER_ERROR) {
@@ -67,7 +67,7 @@ static void runFile(const char *path) {
 }
 
 int main(int argc, const char *argv[]) {
-    initVM();
+    InitVM();
     
     if (argc == 1) {
         repl();
@@ -77,7 +77,7 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "Usage: clox [path]\n");
     }
     
-    freeVM();
+    FreeVM();
     
     return 0;
 }

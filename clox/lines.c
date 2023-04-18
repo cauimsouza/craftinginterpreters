@@ -1,14 +1,14 @@
 #include "lines.h"
 #include "memory.h"
 
-void initLines(Lines* lines) {
+void InitLines(Lines* lines) {
     lines->capacity = 0;
     lines->count = 0;
     lines->lines = NULL;
     lines->lengths = NULL;
 }
 
-void writeLines(Lines* lines, int line) {
+void WriteLines(Lines* lines, int line) {
     if (lines->count > 0 && lines->lines[lines->count - 1] == line) {
         lines->lengths[lines->count - 1]++;
         return;
@@ -25,13 +25,13 @@ void writeLines(Lines* lines, int line) {
     lines->count++;
 }
 
-void freeLines(Lines* lines) {
+void FreeLines(Lines* lines) {
     FREE_ARRAY(int, lines->lines, lines->capacity);
     FREE_ARRAY(int, lines->lengths, lines->capacity);
-    initLines(lines);
+    InitLines(lines);
 }
 
-int getLineAtOffset(Lines* lines, int offset) {
+int GetLineAtOffset(Lines* lines, int offset) {
     if (offset < 0) {
         return -1;
     }

@@ -12,26 +12,26 @@ static void resetStack() {
     vm.stackTop = vm.stack;
 }
 
-void initVM() {
+void InitVM() {
     resetStack();
     vm.objects = NULL;
 }
 
-void freeVM() {
+void FreeVM() {
     Obj *obj = vm.objects;
     while (obj != NULL) {
         Obj *next = obj->next;
-        freeObj(obj);
+        FreeObj(obj);
         obj = next;
     }
 }
 
-void push(Value value) {
+static void push(Value value) {
     *vm.stackTop = value;
     vm.stackTop++;
 }
 
-Value pop() {
+static Value pop() {
     vm.stackTop--;
     return *vm.stackTop;
 }
@@ -44,7 +44,7 @@ static void runtimeError(const char *message) {
     fprintf(stderr, message);
     
     int instruction_offset = vm.ip - vm.chunk->code - 1;
-    int line = getLine(vm.chunk, instruction_offset);
+    int line = GetLine(vm.chunk, instruction_offset);
     fprintf(stderr, "\n[line %d] in script\n", line);
     resetStack();
 }
@@ -52,8 +52,8 @@ static void runtimeError(const char *message) {
 static void concatenate() {
     ObjString *right_str = TO_STRING(pop());
     ObjString *left_str = TO_STRING(pop());
-    Obj *sum = addStrings(left_str, right_str);
-    push(fromObj(sum));
+    Obj *sum = AddStrings(left_str, right_str);
+    push(FromObj(sum));
 }
 
 static InterpretResult run() {
@@ -63,7 +63,7 @@ static InterpretResult run() {
     do { \
         Value right = pop(); \
         Value left = pop(); \
-        if (!isNumber(right) || !isNumber(left)) { \
+        if (!IsNumber(right) || !IsNumber(left)) { \
             runtimeError("Operands must be numbers."); \
             return INTERPRET_RUNTIME_ERROR; \
         } \
@@ -72,9 +72,9 @@ static InterpretResult run() {
     } while (false)
 #define EXEC_LOG_BIN_OP(op) \
     do { \
-        bool right = isTruthy(pop()); \
-        bool left = isTruthy(pop()); \
-        Value result = fromBoolean(left op right); \
+        bool right = IsTruthy(pop()); \
+        bool left = IsTruthy(pop()); \
+        Value result = FromBoolean(left op right); \
         push(result); \
     } while (false)
 
@@ -83,11 +83,11 @@ static InterpretResult run() {
         printf("\t\t");
         for (Value *st_el = vm.stack; st_el != vm.stackTop; st_el++) {
             printf("[ ");
-            printValue(*st_el);
+            PrintValue(*st_el);
             printf(" ]");
         }
         printf("\n");
-        disassembleInstruction(vm.chunk, (int) (vm.ip - vm.chunk->code));
+        DisassembleInstruction(vm.chunk, (int) (vm.ip - vm.chunk->code));
 #endif
 
         Value right, left;
@@ -105,25 +105,25 @@ static InterpretResult run() {
                 push(vm.chunk->constants.values[offset]);
                 break;
             case OP_NIL:
-                push(fromNil());
+                push(FromNil());
                 break;
             case OP_TRUE:
-                push(fromBoolean(true));
+                push(FromBoolean(true));
                 break;
             case OP_FALSE:
-                push(fromBoolean(false));
+                push(FromBoolean(false));
                 break;
             case OP_NEGATE:
                 left = pop();
-                if (!isNumber(left)) {
+                if (!IsNumber(left)) {
                     runtimeError("Operand must be a number.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                push(fromDouble(-left.as.number));
+                push(FromDouble(-left.as.number));
                 break;
             case OP_NOT:
                 left = pop();
-                push(fromBoolean(!isTruthy(left)));
+                push(FromBoolean(!IsTruthy(left)));
                 break;
             case OP_OR:
                 EXEC_LOG_BIN_OP(||);
@@ -132,45 +132,45 @@ static InterpretResult run() {
                 EXEC_LOG_BIN_OP(&&);
                 break;
             case OP_EQ:
-                push(fromBoolean(valuesEqual(pop(), pop())));
+                push(FromBoolean(ValuesEqual(pop(), pop())));
                 break;
             case OP_NEQ:
-                push(fromBoolean(!valuesEqual(pop(), pop())));
+                push(FromBoolean(!ValuesEqual(pop(), pop())));
                 break;
             case OP_LESS:
-                EXEC_NUM_BIN_OP(<, fromBoolean);
+                EXEC_NUM_BIN_OP(<, FromBoolean);
                 break;
             case OP_LESS_EQ:
-                EXEC_NUM_BIN_OP(<=, fromBoolean);
+                EXEC_NUM_BIN_OP(<=, FromBoolean);
                 break;
             case OP_GREATER:
-                EXEC_NUM_BIN_OP(>, fromBoolean);
+                EXEC_NUM_BIN_OP(>, FromBoolean);
                 break;
             case OP_GREATER_EQ:
-                EXEC_NUM_BIN_OP(>=, fromBoolean);
+                EXEC_NUM_BIN_OP(>=, FromBoolean);
                 break;
             case OP_ADD:
-                if (isString(peek(0)) && isString(peek(1))) {
+                if (IsString(peek(0)) && IsString(peek(1))) {
                     concatenate();
                     break;
                 }
-                if (isNumber(peek(0)) && isNumber(peek(1))) {
-                   push(fromDouble(pop().as.number + pop().as.number));
+                if (IsNumber(peek(0)) && IsNumber(peek(1))) {
+                   push(FromDouble(pop().as.number + pop().as.number));
                    break;
                 }
                 runtimeError("Operands must be two strings or two numbers.");
                 return INTERPRET_RUNTIME_ERROR;
             case OP_SUBTRACT:
-                EXEC_NUM_BIN_OP(-, fromDouble);
+                EXEC_NUM_BIN_OP(-, FromDouble);
                 break;
             case OP_MULTIPLY:
-                EXEC_NUM_BIN_OP(*, fromDouble);
+                EXEC_NUM_BIN_OP(*, FromDouble);
                 break;
             case OP_DIVIDE:
-                EXEC_NUM_BIN_OP(/, fromDouble);
+                EXEC_NUM_BIN_OP(/, FromDouble);
                 break;
             case OP_RETURN:
-                printValue(pop());
+                PrintValue(pop());
                 printf("\n");
                 return INTERPRET_OK;
         }
@@ -180,12 +180,12 @@ static InterpretResult run() {
 #undef READ_CONSTANT
 }
 
-InterpretResult interpret(const char *source) {
+InterpretResult Interpret(const char *source) {
     Chunk chunk;
-    initChunk(&chunk);
+    InitChunk(&chunk);
     
-    if (!compile(source, &chunk)) {
-        freeChunk(&chunk);
+    if (!Compile(source, &chunk)) {
+        FreeChunk(&chunk);
         return INTERPRET_COMPILER_ERROR;
     }
     
@@ -194,7 +194,7 @@ InterpretResult interpret(const char *source) {
     
     InterpretResult result = run();
     
-    freeChunk(&chunk);
+    FreeChunk(&chunk);
     
     return result;
 }

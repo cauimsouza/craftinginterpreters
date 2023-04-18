@@ -11,7 +11,7 @@ static int simpleInstruction(const char* name, int offset) {
 static int constantInstruction(const char* name, Chunk* chunk, int offset) {
     uint8_t constant = chunk->code[offset + 1];
     printf("%-16s %8d '", name, constant);
-    printValue(chunk->constants.values[constant]);
+    PrintValue(chunk->constants.values[constant]);
     printf("'\n");
     
     return offset + 2;
@@ -24,19 +24,19 @@ static int constantLongInstruction(const char* name, Chunk* chunk, int offset) {
     }
     
     printf("%-16s %8d '", name, constant);
-    printValue(chunk->constants.values[constant]);
+    PrintValue(chunk->constants.values[constant]);
     printf("'\n");
     
     return offset + 4;
 }
 
-int disassembleInstruction(Chunk* chunk, int offset) {
+int DisassembleInstruction(Chunk* chunk, int offset) {
     printf("%04d ", offset);
     
-    if (offset > 0 && getLine(chunk, offset) == getLine(chunk, offset - 1)) {
+    if (offset > 0 && GetLine(chunk, offset) == GetLine(chunk, offset - 1)) {
         printf("   | ");
     } else {
-        printf("%4d ", getLine(chunk, offset));
+        printf("%4d ", GetLine(chunk, offset));
     }
     
     uint8_t instruction = chunk->code[offset];
@@ -87,10 +87,10 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     }
 }
 
-void disassembleChunk(Chunk* chunk, const char* name) {
+void DisassembleChunk(Chunk* chunk, const char* name) {
     printf("== %s ==\n", name);
     
     for (int offset = 0; offset < chunk->count;) {
-        offset = disassembleInstruction(chunk, offset);     
+        offset = DisassembleInstruction(chunk, offset);     
     }
 }

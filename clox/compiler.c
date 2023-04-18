@@ -43,7 +43,7 @@ typedef struct {
 Parser parser;
 Chunk *compilingChunk;
 
-Precedence nextPrecedence(Precedence precedence) {
+static Precedence nextPrecedence(Precedence precedence) {
   return (Precedence) (precedence + 1); 
 }
 
@@ -77,7 +77,7 @@ static void advance() {
   parser.previous = parser.current;
   
   for (;;) {
-    parser.current = scanToken();
+    parser.current = ScanToken();
     
     if (parser.current.type != TOKEN_ERROR) {
       break;
@@ -96,11 +96,11 @@ static void consume(TokenType type, const char *message) {
 }
 
 static void emitByte(uint8_t byte) {
-  writeChunk(compilingChunk, byte, parser.previous.line);
+  WriteChunk(compilingChunk, byte, parser.previous.line);
 }
 
 static void emitConstant(Value value) {
-  writeConstant(compilingChunk, value, parser.previous.line);
+  WriteConstant(compilingChunk, value, parser.previous.line);
 }
 
 static void emitBoolean(bool boolean) {
@@ -134,11 +134,11 @@ static void expression() {
 
 static void number() {
   double value = strtod(parser.previous.start, NULL);
-  emitConstant(fromDouble(value));
+  emitConstant(FromDouble(value));
 }
 
 static void nil() {
-  emitConstant(fromNil());
+  emitConstant(FromNil());
 }
 
 static void boolean() {
@@ -148,7 +148,7 @@ static void boolean() {
 static void string() {
   size_t length = parser.previous.length - 2;
   const char *chars = parser.previous.start + 1;
-  emitConstant(fromObj(fromString(chars, length))); 
+  emitConstant(FromObj(FromString(chars, length))); 
 }
 
 static void grouping() {
@@ -264,8 +264,8 @@ static ParseRule *getRule(TokenType token_type) {
   return &rules[token_type];
 }
 
-bool compile(const char *source, Chunk *chunk) {
-  initScanner(source);
+bool Compile(const char *source, Chunk *chunk) {
+  InitScanner(source);
   parser.had_error = false;
   parser.panic_mode = false;
   compilingChunk = chunk;
@@ -277,7 +277,7 @@ bool compile(const char *source, Chunk *chunk) {
   
   #ifdef DEBUG_PRINT_CODE
   if (!parser.had_error) {
-    disassembleChunk(compilingChunk, "code");
+    DisassembleChunk(compilingChunk, "code");
   }
   #endif
   

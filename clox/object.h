@@ -23,10 +23,10 @@ typedef struct {
     char chars[];
 } ObjString;
 
-Obj *fromString(const char *chars, size_t length);
-Obj *addStrings(const ObjString *left_str, const ObjString *right_str);
-bool objsEqual(const Obj *a, const Obj *b);
-void freeObj(Obj *obj);
-void printObj(const Obj *obj);
+Obj *FromString(const char *chars, size_t length);
+Obj *AddStrings(const ObjString *left_str, const ObjString *right_str);
+bool ObjsEqual(const Obj *a, const Obj *b);
+void FreeObj(Obj *obj);
+void PrintObj(const Obj *obj);
 
 #endif

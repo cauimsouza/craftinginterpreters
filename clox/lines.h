@@ -8,9 +8,9 @@ typedef struct {
   int* lengths;
 } Lines;
 
-void initLines(Lines* lines);
-void writeLines(Lines* lines, int line);
-void freeLines(Lines* lines);
-int getLineAtOffset(Lines* lines, int offset);
+void InitLines(Lines* lines);
+void WriteLines(Lines* lines, int line);
+void FreeLines(Lines* lines);
+int GetLineAtOffset(Lines* lines, int offset);
 
 #endif
