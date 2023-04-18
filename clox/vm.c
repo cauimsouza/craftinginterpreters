@@ -50,9 +50,9 @@ static void runtimeError(const char *message) {
 }
 
 static void concatenate() {
-    ObjString *right_str = TO_STRING(pop());
-    ObjString *left_str = TO_STRING(pop());
-    Obj *sum = Concatenate(left_str, right_str);
+    Obj *right_string = pop().as.obj;
+    Obj *left_string = pop().as.obj;
+    Obj *sum = Concatenate(left_string, right_string);
     push(FromObj(sum));
 }
 
