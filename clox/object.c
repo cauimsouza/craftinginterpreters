@@ -19,7 +19,7 @@ Obj *FromString(const char *chars, size_t length) {
     return (Obj*) obj;
 }
 
-Obj *AddStrings(const ObjString *left_str, const ObjString *right_str) {
+Obj *Concatenate(const ObjString *left_str, const ObjString *right_str) {
     size_t length = left_str->length + right_str ->length;
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;

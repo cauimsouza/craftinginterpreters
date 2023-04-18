@@ -52,7 +52,7 @@ static void runtimeError(const char *message) {
 static void concatenate() {
     ObjString *right_str = TO_STRING(pop());
     ObjString *left_str = TO_STRING(pop());
-    Obj *sum = AddStrings(left_str, right_str);
+    Obj *sum = Concatenate(left_str, right_str);
     push(FromObj(sum));
 }
 

@@ -24,7 +24,7 @@ typedef struct {
 } ObjString;
 
 Obj *FromString(const char *chars, size_t length);
-Obj *AddStrings(const ObjString *left_str, const ObjString *right_str);
+Obj *Concatenate(const ObjString *left_str, const ObjString *right_str);
 bool ObjsEqual(const Obj *a, const Obj *b);
 void FreeObj(Obj *obj);
 void PrintObj(const Obj *obj);
