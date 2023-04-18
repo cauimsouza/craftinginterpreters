@@ -18,11 +18,12 @@ typedef struct Obj Obj;
 
 typedef struct {
     Obj obj;
-    int length;
-    char *chars;
+    size_t length;
+    // Flexible array member: https://www.wikiwand.com/en/Flexible_array_member
+    char chars[];
 } ObjString;
 
-Obj *fromString(int length, char *chars);
+Obj *fromString(const char *chars, size_t length);
 Obj *addStrings(ObjString *left_str, ObjString *right_str);
 bool objsEqual(Obj *a, Obj *b);
 void freeObj(Obj *obj);

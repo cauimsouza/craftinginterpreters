@@ -18,6 +18,10 @@
 
 #define ALLOCATE(type, count) \
     (type*) reallocate(NULL, 0, sizeof(type) * (count))
+    
+// Same as ALLOCATE but for objects with flexible array members.
+#define ALLOCATE_FAM(obj_type, ar_type, count) \
+    (obj_type*) reallocate(NULL, 0, sizeof(obj_type) + (count) * sizeof(ar_type))
         
 void* reallocate(void* pointer, size_t oldSize, size_t newSize);
 

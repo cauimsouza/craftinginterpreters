@@ -148,14 +148,7 @@ static void boolean() {
 static void string() {
   size_t length = parser.previous.length - 2;
   const char *chars = parser.previous.start + 1;
-  
-  char *copied = ALLOCATE(char, length + 1);
-  for (size_t i = 0; i < length; i++) {
-    copied[i] = chars[i];
-  }
-  copied[length] = '\0';
-  
-  emitConstant(fromObj(fromString(length, copied))); 
+  emitConstant(fromObj(fromString(chars, length))); 
 }
 
 static void grouping() {

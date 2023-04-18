@@ -6,23 +6,26 @@
 #include "object.h"
 #include "vm.h"
 
-Obj *fromString(int length, char *chars) {
-    ObjString *obj = ALLOCATE(ObjString, 1);
+Obj *fromString(const char *chars, size_t length) {
+    ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
     obj->length = length;
-    obj->chars = chars;
     
-    obj->obj.next = vm.objects;
-    vm.objects = &obj->obj;
+    for (size_t i = 0; i < length; i++) {
+       obj->chars[i] = chars[i];
+    }
+    obj->chars[length] = '\0';
     
     return (Obj*) obj;
 }
 
 Obj *addStrings(ObjString *left_str, ObjString *right_str) {
-    int length = left_str->length + right_str ->length;
-    char *chars = ALLOCATE(char, length + 1);
+    size_t length = left_str->length + right_str ->length;
+    ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
+    obj->obj.type = OBJ_STRING;
+    obj->length = length;
     
-    char *c = chars; 
+    char *c = obj->chars;
     for (size_t i = 0; i < left_str->length; i++) {
        *c++ = left_str->chars[i]; 
     }
@@ -31,7 +34,7 @@ Obj *addStrings(ObjString *left_str, ObjString *right_str) {
     }
     *c = '\0';
     
-    return fromString(length, chars);
+    return (Obj*) obj;
 }
 
 bool objsEqual(Obj *a, Obj *b) {
