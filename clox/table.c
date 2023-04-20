@@ -11,7 +11,7 @@ static uint32_t stringHash(const char *chars, int length) {
     const uint32_t prime = 16777619u;
     const uint32_t base = 2166136261u;
     
-    size_t hash = base;
+    uint32_t hash = base;
     for (size_t i = 0; i < length; i++) {
         hash ^= (uint8_t) chars[i];
         hash *= prime;
