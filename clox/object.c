@@ -6,13 +6,6 @@
 #include "object.h"
 #include "vm.h"
 
-typedef struct {
-    Obj obj;
-    size_t length;
-    // Flexible array member: https://www.wikiwand.com/en/Flexible_array_member
-    char chars[];
-} ObjString;
-
 Obj *FromString(const char *chars, size_t length) {
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;

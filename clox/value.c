@@ -4,57 +4,6 @@
 #include "value.h"
 #include "memory.h"
 
-Value FromBoolean(bool boolean) {
-    return (Value) {
-        .type = VAL_BOOL,
-        .as.boolean = boolean
-    };
-}
-
-Value FromDouble(double number) {
-    return (Value) {
-        .type = VAL_NUMBER,
-        .as.number = number
-    };
-}
-
-Value FromNil() {
-    return (Value) {
-        .type = VAL_NIL
-    };
-}
-
-Value FromObj(Obj *obj) {
-    return (Value) {
-        .type = VAL_OBJ,
-        .as.obj = obj
-    };
-}
-
-bool IsBoolean(Value value) {
-    return value.type == VAL_BOOL;
-}
-
-bool IsNumber(Value value) {
-    return value.type == VAL_NUMBER;
-}
-
-bool IsNil(Value value) {
-    return value.type == VAL_NIL;
-}
-
-bool IsObj(Value value) {
-    return value.type == VAL_OBJ;
-}
-
-bool IsString(Value value) {
-    return value.type == VAL_OBJ && value.as.obj->type == OBJ_STRING;
-}
-
-bool IsTruthy(Value value) {
-    return !(IsNil(value) || IsBoolean(value) && !value.as.boolean);
-}
-
 bool ValuesEqual(Value a, Value b) {
     return
         IsBoolean(a) && IsBoolean(b) && a.as.boolean == b.as.boolean ||

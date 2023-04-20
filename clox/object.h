@@ -14,6 +14,13 @@ struct Obj {
 
 typedef struct Obj Obj;
 
+typedef struct {
+    Obj obj;
+    size_t length;
+    // Flexible array member: https://www.wikiwand.com/en/Flexible_array_member
+    char chars[];
+} ObjString;
+
 Obj *FromString(const char *chars, size_t length);
 Obj *Concatenate(const Obj *left_string, const Obj *right_string);
 bool ObjsEqual(const Obj *a, const Obj *b);
