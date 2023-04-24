@@ -6,24 +6,10 @@
 #include "table.h"
 #include "value.h"
 
-static uint32_t stringHash(const char *chars, int length) {
-    // Implementation of the FNV-1a hash algorithm.
-    const uint32_t prime = 16777619u;
-    const uint32_t base = 2166136261u;
-    
-    uint32_t hash = base;
-    for (size_t i = 0; i < length; i++) {
-        hash ^= (uint8_t) chars[i];
-        hash *= prime;
-    }
-    
-    return hash;
-}
-
 // probe assumes the table is not full.
 // key may be in the table.
 static Entry *probe(Table *table, ObjString *key) {
-    size_t i = stringHash(key->chars, key->length) % table->capacity;
+    size_t i = key->hash % table->capacity;
     for (;;) {
         Entry *entry = &table->entries[i];
         if (entry->key == NULL || ObjsEqual((Obj*) entry->key, (Obj*) key)) {
@@ -79,8 +65,9 @@ void FreeTable(Table *table) {
 }
 
 void Insert(Table *table, ObjString *key, Value value) {
-    // Load factor < 50%
-    if (2 * table->count >= table->capacity) {
+    // Load factor alpha = 75%
+    // At all times either capacity = 0 or count / capacity < 0.75.
+    if (4 * (table->count + 1) >= 3 * table->capacity) {
         grow(table);
     }
     
@@ -114,20 +101,22 @@ void Delete(Table *table, ObjString *key) {
         return;
     }
     
-    size_t hash = stringHash(key->chars, key->length) % table->capacity;
+    // Index i is the index of the entry that will be erased or replaced.
     size_t i = (size_t) (entry - table->entries);
+    size_t j = (i + 1) % table->capacity;
     for (;;) {
-        size_t j = (i + 1) % table->capacity; 
         Entry *entry = &table->entries[j];
         if (entry->key == NULL) {
             break;
         }
-        size_t h = stringHash(entry->key->chars, entry->key->length) % table->capacity;
-        if (hash != h) {
-            break;
+        
+        if (i >= (entry->key->hash % table->capacity)) {
+            table->entries[i].key = entry->key;
+            table->entries[i].value = entry->value; 
+            i = j;
         }
-        table->entries[i].value = entry->value; 
-        i = j;
+        
+        j++;
     }
     table->entries[i].key = NULL; 
     table->entries[i].value = FromNil();

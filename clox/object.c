@@ -6,10 +6,26 @@
 #include "object.h"
 #include "vm.h"
 
+static uint32_t hashString(const char *chars, size_t length) {
+    // Implementation of the FNV-1a hash algorithm.
+    const uint32_t prime = 16777619u;
+    const uint32_t base = 2166136261u;
+    
+    uint32_t hash = base;
+    for (size_t i = 0; i < length; i++) {
+        hash ^= (uint8_t) chars[i];
+        hash *= prime;
+    }
+    
+    return hash;
+}
+
+
 Obj *FromString(const char *chars, size_t length) {
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
     obj->length = length;
+    obj->hash = hashString(chars, length);
     
     for (size_t i = 0; i < length; i++) {
        obj->chars[i] = chars[i];
@@ -36,6 +52,8 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
        *c++ = right->chars[i]; 
     }
     *c = '\0';
+    
+    obj->hash = hashString(obj->chars, obj->length);
     
     return (Obj*) obj;
 }

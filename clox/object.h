@@ -17,6 +17,7 @@ typedef struct Obj Obj;
 typedef struct {
     Obj obj;
     size_t length;
+    uint32_t hash;
     // Flexible array member: https://www.wikiwand.com/en/Flexible_array_member
     char chars[];
 } ObjString;
