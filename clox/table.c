@@ -118,6 +118,10 @@ void Delete(Table *table, ObjString *key) {
 }
 
 ObjString *GetKey(Table *table, ObjString *key) {
+    if (table->capacity == 0) {
+        return NULL;
+    }
+    
     size_t i = key->hash % table->capacity;    
     for (;;) {
         Entry *entry = &table->entries[i];
