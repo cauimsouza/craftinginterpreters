@@ -33,7 +33,8 @@ Obj *FromString(const char *chars, size_t length) {
     }
     obj->chars[length] = '\0';
     
-    ObjString *interned = GetKey(&vm.strings, obj);
+    
+    ObjString *interned = Intern(&vm.strings, obj);
     if (interned != NULL) {
         vm.objects = obj->obj.next;
         FreeObj((Obj*) obj);
@@ -66,7 +67,7 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     
     obj->hash = hashString(obj->chars, obj->length);
     
-    ObjString *interned = GetKey(&vm.strings, obj);
+    ObjString *interned = Intern(&vm.strings, obj);
     if (interned != NULL) {
         vm.objects = obj->obj.next;
         FreeObj((Obj*) obj);

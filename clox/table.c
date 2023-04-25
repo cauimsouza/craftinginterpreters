@@ -117,7 +117,7 @@ void Delete(Table *table, ObjString *key) {
     entry->value = FromBoolean(true);
 }
 
-ObjString *GetKey(Table *table, ObjString *key) {
+ObjString *Intern(Table *table, ObjString *key) {
     if (table->capacity == 0) {
         return NULL;
     }

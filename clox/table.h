@@ -21,8 +21,7 @@ void Insert(Table *table, ObjString *key, Value value);
 Value *Get(Table *table, ObjString *key);
 void Delete(Table *table, ObjString *key);
 
-// Returns a key (if it exists) from the table that is equivalent to the
-// provided key.
-ObjString *GetKey(Table *table, ObjString *key);
+// Returns the string interned in the table if it exists, NULL otherwise.
+ObjString *Intern(Table *table, ObjString *key);
 
 #endif
