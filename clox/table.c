@@ -6,18 +6,28 @@
 #include "table.h"
 #include "value.h"
 
+inline static bool isTombstone(Entry *entry) {
+    return entry->key == NULL && IsBoolean(entry->value) && entry->value.as.boolean;
+}
+
 // probe assumes the table is not full.
 // key may be in the table.
 static Entry *probe(Table *table, ObjString *key) {
+    Entry *tombstone = NULL;
     size_t i = key->hash % table->capacity;
     for (;;) {
         Entry *entry = &table->entries[i];
-        if (entry->key == NULL || ObjsEqual((Obj*) entry->key, (Obj*) key)) {
+        if (entry->key == NULL) {
+            if (!isTombstone(entry)) {
+                return tombstone ? tombstone : entry;
+            }
+            tombstone = tombstone ? tombstone : entry; 
+        } else if (ObjsEqual((Obj*) entry->key, (Obj*) key)) {
             return entry;
         }
         
         i = (i + 1) % table->capacity;
-    }    
+    }
 }
 
 static void grow(Table *table) {
@@ -39,6 +49,7 @@ static void grow(Table *table) {
     table->entries = ALLOCATE(Entry, table->capacity);
     for (size_t i = 0; i < table->capacity; i++) {
         table->entries[i].key = NULL;     
+        table->entries[i].value = FromNil();
     }
     
     for (size_t i = 0; i < capacity; i++) {
@@ -72,7 +83,7 @@ void Insert(Table *table, ObjString *key, Value value) {
     }
     
     Entry *entry = probe(table, key);
-    if (entry->key == NULL) {
+    if (entry->key == NULL && !isTombstone(entry)) {
         table->count++;
     }
     entry->key = key;
@@ -100,25 +111,6 @@ void Delete(Table *table, ObjString *key) {
     if (entry->key == NULL) {
         return;
     }
-    
-    // Index i is the index of the entry that will be erased or replaced.
-    size_t i = (size_t) (entry - table->entries);
-    size_t j = (i + 1) % table->capacity;
-    for (;;) {
-        Entry *entry = &table->entries[j];
-        if (entry->key == NULL) {
-            break;
-        }
-        
-        if (i >= (entry->key->hash % table->capacity)) {
-            table->entries[i].key = entry->key;
-            table->entries[i].value = entry->value; 
-            i = j;
-        }
-        
-        j++;
-    }
-    table->entries[i].key = NULL; 
-    table->entries[i].value = FromNil();
-    table->count--;
+    entry->key = NULL;
+    entry->value = FromBoolean(true);
 }
