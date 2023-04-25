@@ -14,10 +14,13 @@ static void resetStack() {
 
 void InitVM() {
     resetStack();
+    InitTable(&vm.strings);
     vm.objects = NULL;
 }
 
 void FreeVM() {
+    FreeTable(&vm.strings);
+    
     Obj *obj = vm.objects;
     while (obj != NULL) {
         Obj *next = obj->next;

@@ -22,7 +22,9 @@ static Entry *probe(Table *table, ObjString *key) {
                 return tombstone ? tombstone : entry;
             }
             tombstone = tombstone ? tombstone : entry; 
-        } else if (ObjsEqual((Obj*) entry->key, (Obj*) key)) {
+        } else if (entry->key == key) {
+            // This is possible because we're using string interning,
+            // otherwise we would have to compare byte by byte.
             return entry;
         }
         
@@ -113,4 +115,21 @@ void Delete(Table *table, ObjString *key) {
     }
     entry->key = NULL;
     entry->value = FromBoolean(true);
+}
+
+ObjString *GetKey(Table *table, ObjString *key) {
+    size_t i = key->hash % table->capacity;    
+    for (;;) {
+        Entry *entry = &table->entries[i];
+        if (entry->key == NULL && !isTombstone(entry)) {
+            return NULL;
+        }
+        if (entry->key != NULL &&
+            entry->key->hash == key->hash &&
+            entry->key->length == key->length &&
+            memcmp(entry->key->chars, key->chars, key->length) == 0) {
+            return entry->key; 
+        }
+        i = (i + 1) % table->capacity;
+    }
 }

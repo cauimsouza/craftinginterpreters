@@ -20,10 +20,11 @@ static uint32_t hashString(const char *chars, size_t length) {
     return hash;
 }
 
-
 Obj *FromString(const char *chars, size_t length) {
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
+    obj->obj.next = vm.objects;
+    vm.objects = &obj->obj;
     obj->length = length;
     obj->hash = hashString(chars, length);
     
@@ -31,6 +32,14 @@ Obj *FromString(const char *chars, size_t length) {
        obj->chars[i] = chars[i];
     }
     obj->chars[length] = '\0';
+    
+    ObjString *interned = GetKey(&vm.strings, obj);
+    if (interned != NULL) {
+        vm.objects = obj->obj.next;
+        FreeObj((Obj*) obj);
+        return (Obj*) interned;
+    }
+    Insert(&vm.strings, obj, FromNil());
     
     return (Obj*) obj;
 }
@@ -42,6 +51,8 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     size_t length = left->length + right ->length;
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
+    obj->obj.next = vm.objects;
+    vm.objects = &obj->obj;
     obj->length = length;
     
     char *c = obj->chars;
@@ -55,6 +66,14 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     
     obj->hash = hashString(obj->chars, obj->length);
     
+    ObjString *interned = GetKey(&vm.strings, obj);
+    if (interned != NULL) {
+        vm.objects = obj->obj.next;
+        FreeObj((Obj*) obj);
+        return (Obj*) interned;
+    }
+    Insert(&vm.strings, obj, FromNil());
+    
     return (Obj*) obj;
 }
 
@@ -63,16 +82,14 @@ bool ObjsEqual(const Obj *a, const Obj *b) {
         return false;
     }
     if (a->type == OBJ_STRING) {
-        return strcmp(((ObjString*)a)->chars, ((ObjString*)b)->chars) == 0;
+        return a == b;
     }
     return false;
 }
 
 void FreeObj(Obj *obj) {
     if (obj->type == OBJ_STRING) {
-        ObjString *string = (ObjString*) obj;
-        FREE_ARRAY(char, string->chars, string->length + 1);
-        FREE(ObjString, string);
+        FREE(ObjString, (ObjString*) obj);
         return;
     }
 }
