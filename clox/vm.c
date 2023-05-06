@@ -172,9 +172,14 @@ static InterpretResult run() {
             case OP_DIVIDE:
                 EXEC_NUM_BIN_OP(/, FromDouble);
                 break;
-            case OP_RETURN:
+            case OP_PRINT:
                 PrintValue(pop());
                 printf("\n");
+                break;
+            case OP_EXPR:
+                pop();
+                break;
+            case OP_RETURN:
                 return INTERPRET_OK;
         }
     }
