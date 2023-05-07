@@ -41,12 +41,12 @@ typedef struct {
     ValueArray constants;
 } Chunk;
 
-void InitChunk(Chunk* chunk);
-void FreeChunk(Chunk* chunk);
+void InitChunk(Chunk *chunk);
+void FreeChunk(Chunk *chunk);
 
-void WriteChunk(Chunk* chunk, uint8_t byte, int line);
-void WriteConstant(Chunk* chunk, Value value, int line);
+void WriteChunk(Chunk *chunk, uint8_t byte, int line);
+void WriteConstant(Chunk *chunk, Value value, int line);
 
-int GetLine(Chunk* chunk, int offset);
+int GetLine(Chunk *chunk, int offset);
 
 #endif
