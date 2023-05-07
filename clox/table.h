@@ -17,8 +17,18 @@ typedef struct {
 
 void InitTable(Table *table);
 void FreeTable(Table *table);
-void Insert(Table *table, ObjString *key, Value value);
-Value *Get(Table *table, ObjString *key);
+
+// Insert inserts an entry into the table.
+//
+// Returns true iff a new entry was added to the table.
+bool Insert(Table *table, ObjString *key, Value value);
+
+// Get retrieves an element from the table.
+//
+// If key is in the table, the associated value is stored in value and true is returned.
+// If key is not in the table, value is unchanged and false is returned.
+bool Get(Table *table, ObjString *key, Value *value);
+
 void Delete(Table *table, ObjString *key);
 
 // Returns the string interned in the table if it exists, NULL otherwise.

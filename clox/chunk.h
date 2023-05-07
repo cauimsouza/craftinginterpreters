@@ -28,6 +28,9 @@ typedef enum {
   OP_RETURN,
   OP_PRINT,
   OP_EXPR, // Expression statement. Simply pops the top of the stack.
+  OP_VAR_DECL,
+  OP_IDENT,
+  OP_ASSIGN,
 } OpCode;
 
 typedef struct {

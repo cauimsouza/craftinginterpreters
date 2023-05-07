@@ -15,11 +15,13 @@ static void resetStack() {
 void InitVM() {
     resetStack();
     InitTable(&vm.strings);
+    InitTable(&vm.globals);
     vm.objects = NULL;
 }
 
 void FreeVM() {
     FreeTable(&vm.strings);
+    FreeTable(&vm.globals);
     
     Obj *obj = vm.objects;
     while (obj != NULL) {
@@ -62,6 +64,7 @@ static void concatenate() {
 static InterpretResult run() {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define AS_STRING(value) ((ObjString*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
         Value right = pop(); \
@@ -179,11 +182,34 @@ static InterpretResult run() {
             case OP_EXPR:
                 pop();
                 break;
+            case OP_VAR_DECL:
+                right = pop(); // value
+                left = pop(); // variable
+                Insert(&vm.globals, AS_STRING(left), right);
+                break;
+            case OP_IDENT:
+                right = pop(); // variable
+                if (Get(&vm.globals, AS_STRING(right), &left)) {
+                    push(left);
+                    break;
+                }
+                runtimeError("Undefined identifier.");
+                return INTERPRET_RUNTIME_ERROR;
+            case OP_ASSIGN:
+                right = pop(); // value
+                left = pop(); // variable
+                if (Insert(&vm.globals, AS_STRING(left), right)) {
+                   runtimeError("Undefined variable.");
+                   return INTERPRET_RUNTIME_ERROR;
+                }
+                push(right);
+                break;
             case OP_RETURN:
                 return INTERPRET_OK;
         }
     }
 
+#undef AS_STRING
 #undef READ_BYTE
 #undef READ_CONSTANT
 }

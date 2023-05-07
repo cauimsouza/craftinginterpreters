@@ -77,7 +77,7 @@ void FreeTable(Table *table) {
     InitTable(table);
 }
 
-void Insert(Table *table, ObjString *key, Value value) {
+bool Insert(Table *table, ObjString *key, Value value) {
     // Load factor alpha = 75%
     // At all times either capacity = 0 or count / capacity < 0.75.
     if (4 * (table->count + 1) >= 3 * table->capacity) {
@@ -85,23 +85,26 @@ void Insert(Table *table, ObjString *key, Value value) {
     }
     
     Entry *entry = probe(table, key);
+    bool res = entry->key == NULL;
     if (entry->key == NULL && !isTombstone(entry)) {
         table->count++;
     }
     entry->key = key;
     entry->value = value;
+    return res;
 }
 
-Value *Get(Table *table, ObjString *key) {
+bool Get(Table *table, ObjString *key, Value *value) {
     if (table->count == 0) {
        return NULL; 
     }
     
     Entry *entry = probe(table, key);
     if (entry->key == NULL) {
-        return NULL;
+        return false;
     }
-    return &entry->value;
+    *value = entry->value;
+    return true;
 }
 
 void Delete(Table *table, ObjString *key) {

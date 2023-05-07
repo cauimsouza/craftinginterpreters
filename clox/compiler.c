@@ -32,7 +32,7 @@ typedef enum {
   PREC_PRIMARY
 } Precedence;
 
-typedef void (*ParseFn)();
+typedef void (*ParseFn)(bool can_assign);
 
 typedef struct {
   ParseFn prefix;
@@ -127,12 +127,17 @@ static void parsePrecedence(Precedence precedence) {
     return;
   }
   
-  prefix_rule();
+  bool can_assign = precedence <= PREC_ASSIGNMENT;
+  prefix_rule(can_assign);
   
   while (precedence <= getRule(parser.current.type)->precedence) {
     advance();
     ParseFn infix_rule = getRule(parser.previous.type)->infix;
-    infix_rule();
+    infix_rule(can_assign);
+  }
+  
+  if (can_assign && match(TOKEN_EQUAL)) {
+    error("Invalid assignment target.");
   }
 }
 
@@ -140,31 +145,45 @@ static void expression() {
   parsePrecedence(PREC_ASSIGNMENT);
 }
 
-static void number() {
+static void number(bool can_assign) {
   double value = strtod(parser.previous.start, NULL);
   emitConstant(FromDouble(value));
 }
 
-static void nil() {
+static void nil(bool can_assign) {
   emitConstant(FromNil());
 }
 
-static void boolean() {
+static void boolean(bool can_assign) {
   emitBoolean(parser.previous.type == TOKEN_TRUE);
 }
 
-static void string() {
+static void string(bool can_assign) {
   size_t length = parser.previous.length - 2;
   const char *chars = parser.previous.start + 1;
   emitConstant(FromObj(FromString(chars, length))); 
 }
 
-static void grouping() {
+static void identifier(bool can_assign) {
+  size_t length = parser.previous.length;
+  const char *chars = parser.previous.start;
+  emitConstant(FromObj(FromString(chars, length))); 
+  
+  if (can_assign && match(TOKEN_EQUAL)) {
+    parsePrecedence(PREC_ASSIGNMENT);
+    emitByte(OP_ASSIGN);
+    return;
+  }
+  
+  emitByte(OP_IDENT);
+}
+
+static void grouping(bool can_assign) {
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
-static void unary() {
+static void unary(bool can_assign) {
   TokenType op = parser.previous.type;
   
   parsePrecedence(PREC_UNARY);
@@ -179,7 +198,7 @@ static void unary() {
   }
 }
 
-static void binary() {
+static void binary(bool can_assign) {
   TokenType op_type = parser.previous.type;
   
   ParseRule *rule = getRule(op_type);
@@ -242,10 +261,10 @@ ParseRule rules[] = {
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EQUAL_EQUAL]   = {NULL,     binary, PREC_EQUALITY},
   [TOKEN_GREATER]       = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_GREATER_EQUAL] = {NULL,     binary,   PREC_COMPARISON},
+  [TOKEN_GREATER_EQUAL] = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IDENTIFIER]    = {identifier,NULL, PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     binary, PREC_AND},
@@ -314,12 +333,34 @@ static void expressionStatement() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+    return;
   }
   expressionStatement();
 }
 
+static void variableDeclaration() {
+  consume(TOKEN_IDENTIFIER, "Expect variable name.");
+  size_t length = parser.previous.length;
+  const char *chars = parser.previous.start;
+  emitConstant(FromObj(FromString(chars, length))); 
+  
+  if (match(TOKEN_EQUAL)) {
+    expression();
+  } else {
+    emitByte(OP_NIL);
+  }
+  
+  consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
+  
+  emitByte(OP_VAR_DECL);
+}
+
 static void declaration() {
-  statement(); 
+  if (match(TOKEN_VAR)) {
+    variableDeclaration();
+  } else {
+    statement(); 
+  }
   
   if (parser.panic_mode) {
     synchronise();
