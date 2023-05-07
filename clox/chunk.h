@@ -31,6 +31,8 @@ typedef enum {
   OP_VAR_DECL,
   OP_IDENT,
   OP_ASSIGN,
+  OP_RCACHE,
+  OP_WCACHE,
 } OpCode;
 
 typedef struct {
@@ -39,14 +41,18 @@ typedef struct {
     uint8_t* code;
     Lines lines;
     ValueArray constants;
+    ObjString **cache;
+    size_t cache_size;
 } Chunk;
 
-void InitChunk(Chunk* chunk);
-void FreeChunk(Chunk* chunk);
+void InitChunk(Chunk *chunk);
+void FreeChunk(Chunk *chunk);
 
-void WriteChunk(Chunk* chunk, uint8_t byte, int line);
-void WriteConstant(Chunk* chunk, Value value, int line);
+void WriteChunk(Chunk *chunk, uint8_t byte, int line);
+void WriteConstant(Chunk *chunk, Value value, int line);
+void ReadCache(Chunk *chunk, ObjString *obj, int line);
+void WriteCache(Chunk *chunk, ObjString *obj, int line);
 
-int GetLine(Chunk* chunk, int offset);
+int GetLine(Chunk *chunk, int offset);
 
 #endif

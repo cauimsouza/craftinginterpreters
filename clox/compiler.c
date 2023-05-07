@@ -165,17 +165,18 @@ static void string(bool can_assign) {
 }
 
 static void identifier(bool can_assign) {
+  int line = parser.previous.line;
   size_t length = parser.previous.length;
   const char *chars = parser.previous.start;
-  emitConstant(FromObj(FromString(chars, length))); 
+  ObjString *obj = (ObjString*) FromString(chars, length);
   
   if (can_assign && match(TOKEN_EQUAL)) {
     parsePrecedence(PREC_ASSIGNMENT);
-    emitByte(OP_ASSIGN);
+    WriteCache(compilingChunk, obj, line);
     return;
   }
   
-  emitByte(OP_IDENT);
+  ReadCache(compilingChunk, obj, line);
 }
 
 static void grouping(bool can_assign) {

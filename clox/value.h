@@ -5,6 +5,7 @@
 #include "object.h"
 
 typedef enum {
+    VAL_NONE,
     VAL_BOOL,
     VAL_NIL,
     VAL_NUMBER,
@@ -43,6 +44,10 @@ void InitValueArray(ValueArray* array);
 void WriteValueArray(ValueArray* array, Value value);
 void FreeValueArray(ValueArray* array);
 
+static inline Value None() {
+    return (Value) { .type = VAL_NONE };
+}
+
 static inline Value FromBoolean(bool boolean) {
     return (Value) {
         .type = VAL_BOOL,
@@ -68,6 +73,10 @@ static inline Value FromObj(Obj *obj) {
         .type = VAL_OBJ,
         .as.obj = obj
     };
+}
+
+static inline bool IsNone(Value value) {
+    return value.type == VAL_NONE;
 }
 
 static inline bool IsBoolean(Value value) {

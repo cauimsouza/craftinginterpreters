@@ -3,6 +3,7 @@
 #include "compiler.h"
 #include "common.h"
 #include "debug.h"
+#include "memory.h"
 #include "value.h"
 #include "vm.h"
 
@@ -17,6 +18,7 @@ void InitVM() {
     InitTable(&vm.strings);
     InitTable(&vm.globals);
     vm.objects = NULL;
+    vm.cache = NULL;
 }
 
 void FreeVM() {
@@ -29,6 +31,8 @@ void FreeVM() {
         FreeObj(obj);
         obj = next;
     }
+    
+    FREE_ARRAY(Value, vm.cache, vm.chunk->cache_size);
 }
 
 static void push(Value value) {
@@ -96,6 +100,7 @@ static InterpretResult run() {
         DisassembleInstruction(vm.chunk, (int) (vm.ip - vm.chunk->code));
 #endif
 
+        uint8_t i;
         Value right, left;
         uint8_t instruction = READ_BYTE();
         switch (instruction) {
@@ -204,6 +209,19 @@ static InterpretResult run() {
                 }
                 push(right);
                 break;
+            case OP_RCACHE:
+                i = READ_BYTE();
+                if (IsNone(vm.cache[i])) {
+                    Get(&vm.globals, vm.chunk->cache[i], &vm.cache[i]);
+                }
+                push(vm.cache[i]);
+                break;
+            case OP_WCACHE:
+                i = READ_BYTE();
+                right = peek(0);
+                Insert(&vm.globals, vm.chunk->cache[i], right);
+                vm.cache[i] = right;
+                break;
             case OP_RETURN:
                 return INTERPRET_OK;
         }
@@ -225,9 +243,14 @@ InterpretResult Interpret(const char *source) {
     
     vm.chunk = &chunk;
     vm.ip = chunk.code;
+    vm.cache = ALLOCATE(Value, chunk.cache_size);
+    for (size_t i = 0; i < chunk.cache_size; i++) {
+        vm.cache[i] = None();
+    }
     
     InterpretResult result = run();
     
+    FREE_ARRAY(Value, vm.cache, chunk.cache_size);
     FreeChunk(&chunk);
     
     return result;

@@ -30,6 +30,13 @@ static int constantLongInstruction(const char* name, Chunk* chunk, int offset) {
     return offset + 4;
 }
 
+static int cacheInstruction(const char* name, Chunk* chunk, int offset) {
+    uint8_t index = chunk->code[offset + 1];
+    printf("%-16s %8d\n", name, index);
+    
+    return offset + 2;
+}
+
 int DisassembleInstruction(Chunk* chunk, int offset) {
     printf("%04d ", offset);
     
@@ -91,6 +98,10 @@ int DisassembleInstruction(Chunk* chunk, int offset) {
             return simpleInstruction("OP_IDENT", offset);
         case OP_ASSIGN:
             return simpleInstruction("OP_ASSIGN", offset);
+        case OP_RCACHE:
+            return cacheInstruction("OP_RCACHE", chunk, offset);
+        case OP_WCACHE:
+            return cacheInstruction("OP_WCACHE", chunk, offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
