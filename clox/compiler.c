@@ -50,14 +50,77 @@ typedef struct {
 } Local;
 
 typedef struct {
-  Local locals[UINT8_COUNT];
+  Local *locals;
   int local_count;
+  int local_capacity;
+  
   int scope_depth;
 } Compiler;
 
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
+
+static bool sameVariable(Token a, Token b) {
+    return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
+}
+
+static void initCompiler(Compiler *compiler) {
+  compiler->locals = NULL;
+  compiler->local_count = 0;
+  compiler->local_capacity = 0;
+  
+  compiler->scope_depth = 0;
+}
+
+static void freeCompiler(Compiler *compiler) {
+  FREE_ARRAY(Local, compiler->locals, compiler->local_capacity);
+  initCompiler(compiler);
+}
+
+static void growLocals(Compiler *compiler) {
+  compiler->local_capacity = GROW_CAPACITY(compiler->local_capacity);
+  compiler->locals = GROW_ARRAY(Local, compiler->locals, compiler->local_count, compiler->local_capacity);
+}
+
+// Returns true iff the local was successfully declared.
+// declareLocal fails iff there already is a local with the same name in the scope.
+static bool declareLocal(Compiler *compiler, Token name) {
+  for (int i = compiler->local_count - 1; i >= 0; i--) {
+    Local *local = &compiler->locals[i];
+    if (local->depth < compiler->scope_depth) {
+      break;
+    }
+    
+    if (sameVariable(name, local->name)) {
+      return false;
+    }
+  }
+  
+  if (compiler->local_count == compiler->local_capacity) {
+    growLocals(compiler);
+  }
+  
+  Local *local = &compiler->locals[compiler->local_count++];
+  local->name = name;
+  local->depth = -1;
+  
+  return true;
+}
+
+static int findLocal(Compiler *compiler, Token name) {
+  for (int i = compiler->local_count - 1; i >= 0; i--) {
+    if (sameVariable(name, compiler->locals[i].name)) {
+      return i;
+    }
+  }
+  
+  return -1;
+}
+
+static void deleteLocal(Compiler *compiler) {
+  compiler->local_count--;
+}
 
 static Precedence nextPrecedence(Precedence precedence) {
   return (Precedence) (precedence + 1); 
@@ -131,12 +194,6 @@ static void emitConstant(Value value) {
   WriteConstant(compilingChunk, value, parser.previous.line);
 }
 
-static void initCompiler(Compiler *compiler) {
-  compiler->local_count = 0;
-  compiler->scope_depth = 0;
-  current = compiler;
-}
-
 static void emitBoolean(bool boolean) {
   uint8_t byte = boolean ? OP_TRUE : OP_FALSE;
   emitByte(byte);
@@ -190,23 +247,6 @@ static void string(bool can_assign) {
   emitConstant(FromObj(FromString(chars, length))); 
 }
 
-static bool sameVariable(Token a, Token b) {
-    return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
-}
-
-static int findLocal(Token name) {
-  for (int i = current->local_count - 1; i >= 0; i--) {
-    if (sameVariable(name, current->locals[i].name)) {
-      if (current->locals[i].depth < 0) {
-        error("Can't read local variable being initialised.");
-      }
-      return i;
-    }
-  }
-  
-  return -1;
-}
-
 // Similar to identifier, but for cases where the identifier is in a local scope.
 static void identifierLocal(bool can_assign, int local_index) {
   if (can_assign && match(TOKEN_EQUAL)) {
@@ -223,8 +263,11 @@ static void identifierLocal(bool can_assign, int local_index) {
 }
 
 static void identifier(bool can_assign) {
-  int index = findLocal(parser.previous);
-  if (index >= 0) {
+  int index = findLocal(current, parser.previous);
+  if (index >= 0 && current->locals[index].depth < 0) {
+      error("Can't read local variable being initialised.");
+      return;
+  } else if (index >= 0) {
     identifierLocal(can_assign, index);
     return;
   }
@@ -399,7 +442,7 @@ static void beginScope() {
 }
 
 static void endScope() {
-  for (; current->local_count > 0; current->local_count--) {
+  for (; current->local_count > 0; deleteLocal(current)) {
     if (current->locals[current->local_count - 1].depth != current->scope_depth) {
       break;
     }
@@ -430,29 +473,12 @@ static void statement() {
 }
 
 static void variableDeclarationLocal() {
-  if (current->local_count == UINT8_COUNT) {
-    error("Too many local variables in this function.");   
-    return;
-  }
-  
   consume(TOKEN_IDENTIFIER, "Expect variable name.");
   Token name = parser.previous;
   
-  for (size_t i = current->local_count; i > 0; i--) {
-    Local *local = &current->locals[i - 1];
-    if (local->depth < current->scope_depth) {
-      break;
-    }
-    
-    if (sameVariable(name, local->name)) {
+  if (!declareLocal(current, name)) {
       error("Already a variable with this name in this scope."); 
-      return;
-    }
   }
-  
-  Local *local = &current->locals[current->local_count++];
-  local->name = name;
-  local->depth = -1;
   
   if (match(TOKEN_EQUAL)) {
     expression();
@@ -460,7 +486,7 @@ static void variableDeclarationLocal() {
     emitByte(OP_NIL);
   }
   
-  local->depth = current->scope_depth;
+  current->locals[current->local_count - 1].depth = current->scope_depth;
   
   consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
 }
@@ -503,11 +529,13 @@ static void declaration() {
 
 bool Compile(const char *source, Chunk *chunk) {
   InitScanner(source);
-  Compiler compiler;
-  initCompiler(&compiler);
   parser.had_error = false;
   parser.panic_mode = false;
   compilingChunk = chunk;
+  
+  Compiler compiler;
+  initCompiler(&compiler);
+  current = &compiler;
   
   advance();
   
@@ -522,6 +550,8 @@ bool Compile(const char *source, Chunk *chunk) {
     DisassembleChunk(compilingChunk, "code");
   }
   #endif
+  
+  freeCompiler(&compiler);
   
   return !parser.had_error;
 }
