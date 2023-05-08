@@ -3,12 +3,12 @@
 #include "debug.h"
 #include "value.h"
 
-static int simpleInstruction(const char* name, int offset) {
+static int simpleInstruction(const char *name, int offset) {
     printf("%s\n", name);
     return offset + 1;
 }
 
-static int constantInstruction(const char* name, Chunk* chunk, int offset) {
+static int constantInstruction(const char *name, Chunk *chunk, int offset) {
     uint8_t constant = chunk->code[offset + 1];
     printf("%-16s %8d '", name, constant);
     PrintValue(chunk->constants.values[constant]);
@@ -17,7 +17,7 @@ static int constantInstruction(const char* name, Chunk* chunk, int offset) {
     return offset + 2;
 }
 
-static int constantLongInstruction(const char* name, Chunk* chunk, int offset) {
+static int constantLongInstruction(const char *name, Chunk *chunk, int offset) {
     int constant = 0;
     for (int i = 0; i < 3; i++) {
         constant += chunk->code[offset + 1 + i] * (1 << (8 * i));
@@ -30,7 +30,12 @@ static int constantLongInstruction(const char* name, Chunk* chunk, int offset) {
     return offset + 4;
 }
 
-int DisassembleInstruction(Chunk* chunk, int offset) {
+static int byteInstructions(const char *name, Chunk *chunk, int offset) {
+    printf("%-16s %8d\n", name, chunk->code[offset + 1]);
+    return offset + 2;
+}
+
+int DisassembleInstruction(Chunk *chunk, int offset) {
     printf("%04d ", offset);
     
     if (offset > 0 && GetLine(chunk, offset) == GetLine(chunk, offset - 1)) {
@@ -83,21 +88,25 @@ int DisassembleInstruction(Chunk* chunk, int offset) {
             return simpleInstruction("OP_RETURN", offset);
         case OP_PRINT:
             return simpleInstruction("OP_PRINT", offset);
-        case OP_EXPR:
-            return simpleInstruction("OP_EXPR", offset);
+        case OP_POP:
+            return simpleInstruction("OP_POP", offset);
         case OP_VAR_DECL:
             return simpleInstruction("OP_VAR_DECL", offset);
-        case OP_IDENT:
-            return simpleInstruction("OP_IDENT", offset);
-        case OP_ASSIGN:
-            return simpleInstruction("OP_ASSIGN", offset);
+        case OP_IDENT_GLOBAL:
+            return simpleInstruction("OP_IDENTO", offset);
+        case OP_IDENT_LOCAL:
+            return byteInstructions("OP_IDENT_LOCAL", chunk, offset);
+        case OP_ASSIGN_GLOBAL:
+            return simpleInstruction("OP_ASSIGN_GLOBAL", offset);
+        case OP_ASSIGN_LOCAL:
+            return byteInstructions("OP_ASSIGN_LOCAL", chunk, offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
     }
 }
 
-void DisassembleChunk(Chunk* chunk, const char* name) {
+void DisassembleChunk(Chunk *chunk, const char *name) {
     printf("== %s ==\n", name);
     
     for (int offset = 0; offset < chunk->count;) {

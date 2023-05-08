@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -40,7 +41,19 @@ typedef struct {
   Precedence precedence;
 } ParseRule;
 
+typedef struct {
+  Token name;
+  int depth;
+} Local;
+
+typedef struct {
+  Local locals[UINT8_COUNT];
+  int local_count;
+  int scope_depth;
+} Compiler;
+
 Parser parser;
+Compiler *current = NULL;
 Chunk *compilingChunk;
 
 static Precedence nextPrecedence(Precedence precedence) {
@@ -87,8 +100,12 @@ static void advance() {
   }
 }
 
+static bool check(TokenType type) {
+  return parser.current.type == type;
+}
+
 static void consume(TokenType type, const char *message) {
-  if (parser.current.type == type) {
+  if (check(type)) {
     advance();
     return;
   }
@@ -96,7 +113,7 @@ static void consume(TokenType type, const char *message) {
 }
 
 static bool match(TokenType type) {
-  if (parser.current.type == type) {
+  if (check(type)) {
     advance();
     return true;
   }
@@ -109,6 +126,12 @@ static void emitByte(uint8_t byte) {
 
 static void emitConstant(Value value) {
   WriteConstant(compilingChunk, value, parser.previous.line);
+}
+
+static void initCompiler(Compiler *compiler) {
+  compiler->local_count = 0;
+  compiler->scope_depth = 0;
+  current = compiler;
 }
 
 static void emitBoolean(bool boolean) {
@@ -164,18 +187,53 @@ static void string(bool can_assign) {
   emitConstant(FromObj(FromString(chars, length))); 
 }
 
+static bool sameVariable(Token a, Token b) {
+    return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
+}
+
+static int findLocal(Token name) {
+  for (int i = current->local_count - 1; i >= 0; i--) {
+    if (sameVariable(name, current->locals[i].name)) {
+      return i;
+    }
+  }
+  
+  return -1;
+}
+
+// Similar to identifier, but for cases where the identifier is in a local scope.
+static void identifierLocal(bool can_assign, int local_index) {
+  if (can_assign && match(TOKEN_EQUAL)) {
+    parsePrecedence(PREC_ASSIGNMENT);
+    
+    emitByte(OP_ASSIGN_LOCAL);
+    emitByte(local_index);
+    
+    return;
+  }
+  
+  emitByte(OP_IDENT_LOCAL);
+  emitByte(local_index);
+}
+
 static void identifier(bool can_assign) {
+  int index = findLocal(parser.previous);
+  if (index >= 0) {
+    identifierLocal(can_assign, index);
+    return;
+  }
+  
   size_t length = parser.previous.length;
   const char *chars = parser.previous.start;
   emitConstant(FromObj(FromString(chars, length))); 
   
   if (can_assign && match(TOKEN_EQUAL)) {
     parsePrecedence(PREC_ASSIGNMENT);
-    emitByte(OP_ASSIGN);
+    emitByte(OP_ASSIGN_GLOBAL);
     return;
   }
   
-  emitByte(OP_IDENT);
+  emitByte(OP_IDENT_GLOBAL);
 }
 
 static void grouping(bool can_assign) {
@@ -327,18 +385,86 @@ static void printStatement() {
 static void expressionStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
-  emitByte(OP_EXPR);
+  emitByte(OP_POP);
+}
+
+static void beginScope() {
+  current->scope_depth++;
+}
+
+static void endScope() {
+  for (; current->local_count > 0; current->local_count--) {
+    if (current->locals[current->local_count - 1].depth != current->scope_depth) {
+      break;
+    }
+    emitByte(OP_POP);
+  }
+  
+  current->scope_depth--;
+}
+
+static void block() {
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    declaration();
+  }
+  
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_LEFT_BRACE)) {
+    beginScope();
+    block();
+    endScope();
+  } else {
+    expressionStatement();
+  }
+}
+
+static void variableDeclarationLocal() {
+  if (current->local_count == UINT8_COUNT) {
+    error("Too many local variables in this function.");   
     return;
   }
-  expressionStatement();
+  
+  consume(TOKEN_IDENTIFIER, "Expect variable name.");
+  Token name = parser.previous;
+  
+  for (size_t i = current->local_count; i > 0; i--) {
+    Local *local = &current->locals[i - 1];
+    if (local->depth < current->scope_depth) {
+      break;
+    }
+    
+    if (sameVariable(name, local->name)) {
+      error("Already a variable with this name in this scope."); 
+      return;
+    }
+  }
+  
+  Local *local = &current->locals[current->local_count++];
+  local->name = name;
+  local->depth = current->scope_depth;
+  
+  if (match(TOKEN_EQUAL)) {
+    expression();
+  } else {
+    emitByte(OP_NIL);
+  }
+  
+  consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
 }
 
 static void variableDeclaration() {
+  if (current->scope_depth > 0) {
+    variableDeclarationLocal();   
+    return;
+  }
+  
+  // Variable declaration at the global scope.
+  
   consume(TOKEN_IDENTIFIER, "Expect variable name.");
   size_t length = parser.previous.length;
   const char *chars = parser.previous.start;
@@ -369,6 +495,8 @@ static void declaration() {
 
 bool Compile(const char *source, Chunk *chunk) {
   InitScanner(source);
+  Compiler compiler;
+  initCompiler(&compiler);
   parser.had_error = false;
   parser.panic_mode = false;
   compilingChunk = chunk;

@@ -179,7 +179,7 @@ static InterpretResult run() {
                 PrintValue(pop());
                 printf("\n");
                 break;
-            case OP_EXPR:
+            case OP_POP:
                 pop();
                 break;
             case OP_VAR_DECL:
@@ -187,7 +187,7 @@ static InterpretResult run() {
                 left = pop(); // variable
                 Insert(&vm.globals, AS_STRING(left), right);
                 break;
-            case OP_IDENT:
+            case OP_IDENT_GLOBAL:
                 right = pop(); // variable
                 if (Get(&vm.globals, AS_STRING(right), &left)) {
                     push(left);
@@ -195,7 +195,12 @@ static InterpretResult run() {
                 }
                 runtimeError("Undefined identifier.");
                 return INTERPRET_RUNTIME_ERROR;
-            case OP_ASSIGN:
+            case OP_IDENT_LOCAL: {
+                uint8_t i = READ_BYTE();
+                push(vm.stack[i]);
+                break;
+            }
+            case OP_ASSIGN_GLOBAL:
                 right = pop(); // value
                 left = pop(); // variable
                 if (Insert(&vm.globals, AS_STRING(left), right)) {
@@ -204,6 +209,11 @@ static InterpretResult run() {
                 }
                 push(right);
                 break;
+            case OP_ASSIGN_LOCAL: {
+                uint8_t i = READ_BYTE();
+                vm.stack[i] = peek(0);
+                break;
+            }
             case OP_RETURN:
                 return INTERPRET_OK;
         }

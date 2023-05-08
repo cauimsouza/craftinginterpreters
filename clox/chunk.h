@@ -27,10 +27,12 @@ typedef enum {
   OP_DIVIDE,
   OP_RETURN,
   OP_PRINT,
-  OP_EXPR, // Expression statement. Simply pops the top of the stack.
+  OP_POP, // Expression statement. Simply pops the top of the stack.
   OP_VAR_DECL,
-  OP_IDENT,
-  OP_ASSIGN,
+  OP_IDENT_GLOBAL,
+  OP_IDENT_LOCAL,
+  OP_ASSIGN_GLOBAL,
+  OP_ASSIGN_LOCAL,
 } OpCode;
 
 typedef struct {
