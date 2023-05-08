@@ -20,7 +20,7 @@ void FreeTable(Table *table);
 
 // Insert inserts an entry into the table.
 //
-// Returns true iff a new entry was added to the table.
+// Returns true iff key alredy existed in the hash table, i.e., if a new element was not introduced.
 bool Insert(Table *table, ObjString *key, Value value);
 
 // Get retrieves an element from the table.

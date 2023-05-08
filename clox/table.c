@@ -85,7 +85,7 @@ bool Insert(Table *table, ObjString *key, Value value) {
     }
     
     Entry *entry = probe(table, key);
-    bool res = entry->key == NULL;
+    bool res = entry->key != NULL;
     if (entry->key == NULL && !isTombstone(entry)) {
         table->count++;
     }

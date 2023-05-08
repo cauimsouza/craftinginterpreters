@@ -6,6 +6,7 @@
 #include "memory.h"
 #include "value.h"
 #include "vm.h"
+#include "identifier.h"
 
 VM vm; 
 
@@ -18,7 +19,6 @@ void InitVM() {
     InitTable(&vm.strings);
     InitTable(&vm.globals);
     vm.objects = NULL;
-    vm.cache = NULL;
 }
 
 void FreeVM() {
@@ -31,8 +31,6 @@ void FreeVM() {
         FreeObj(obj);
         obj = next;
     }
-    
-    FREE_ARRAY(Value, vm.cache, vm.chunk->cache_size);
 }
 
 static void push(Value value) {
@@ -193,35 +191,22 @@ static InterpretResult run() {
                 Insert(&vm.globals, AS_STRING(left), right);
                 break;
             case OP_IDENT:
-                right = pop(); // variable
-                if (Get(&vm.globals, AS_STRING(right), &left)) {
-                    push(left);
+                i = READ_BYTE();
+                ObjString *variable = vm.chunk->identifiers.identifiers[i];
+                if (Get(&vm.globals, variable, &right)) {
+                    push(right);
                     break;
                 }
-                runtimeError("Undefined identifier.");
-                return INTERPRET_RUNTIME_ERROR;
+                runtimeError("Undefined variable.");
+                return INTERPRET_RUNTIME_ERROR; 
             case OP_ASSIGN:
-                right = pop(); // value
-                left = pop(); // variable
-                if (Insert(&vm.globals, AS_STRING(left), right)) {
-                   runtimeError("Undefined variable.");
-                   return INTERPRET_RUNTIME_ERROR;
-                }
-                push(right);
-                break;
-            case OP_RCACHE:
                 i = READ_BYTE();
-                if (IsNone(vm.cache[i])) {
-                    Get(&vm.globals, vm.chunk->cache[i], &vm.cache[i]);
+                variable = vm.chunk->identifiers.identifiers[i];
+                if (Insert(&vm.globals, variable, peek(0))) {
+                    break;
                 }
-                push(vm.cache[i]);
-                break;
-            case OP_WCACHE:
-                i = READ_BYTE();
-                right = peek(0);
-                Insert(&vm.globals, vm.chunk->cache[i], right);
-                vm.cache[i] = right;
-                break;
+                runtimeError("Undefined variable.");
+                return INTERPRET_RUNTIME_ERROR;
             case OP_RETURN:
                 return INTERPRET_OK;
         }
@@ -243,14 +228,9 @@ InterpretResult Interpret(const char *source) {
     
     vm.chunk = &chunk;
     vm.ip = chunk.code;
-    vm.cache = ALLOCATE(Value, chunk.cache_size);
-    for (size_t i = 0; i < chunk.cache_size; i++) {
-        vm.cache[i] = None();
-    }
     
     InterpretResult result = run();
     
-    FREE_ARRAY(Value, vm.cache, chunk.cache_size);
     FreeChunk(&chunk);
     
     return result;

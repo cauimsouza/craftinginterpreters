@@ -172,11 +172,11 @@ static void identifier(bool can_assign) {
   
   if (can_assign && match(TOKEN_EQUAL)) {
     parsePrecedence(PREC_ASSIGNMENT);
-    WriteCache(compilingChunk, obj, line);
+    WriteIdentifier(compilingChunk, obj, line);
     return;
   }
   
-  ReadCache(compilingChunk, obj, line);
+  ReadIdentifier(compilingChunk, obj, line);
 }
 
 static void grouping(bool can_assign) {

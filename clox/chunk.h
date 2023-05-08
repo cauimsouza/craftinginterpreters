@@ -2,6 +2,7 @@
 #define clox_chunk_h
 
 #include "common.h"
+#include "identifier.h"
 #include "value.h"
 #include "lines.h"
 
@@ -41,8 +42,7 @@ typedef struct {
     uint8_t* code;
     Lines lines;
     ValueArray constants;
-    ObjString **cache;
-    size_t cache_size;
+    Identifiers identifiers;
 } Chunk;
 
 void InitChunk(Chunk *chunk);
@@ -50,8 +50,8 @@ void FreeChunk(Chunk *chunk);
 
 void WriteChunk(Chunk *chunk, uint8_t byte, int line);
 void WriteConstant(Chunk *chunk, Value value, int line);
-void ReadCache(Chunk *chunk, ObjString *obj, int line);
-void WriteCache(Chunk *chunk, ObjString *obj, int line);
+void ReadIdentifier(Chunk *chunk, ObjString *obj, int line);
+void WriteIdentifier(Chunk *chunk, ObjString *obj, int line);
 
 int GetLine(Chunk *chunk, int offset);
 

@@ -13,15 +13,14 @@ void InitChunk(Chunk* chunk) {
     chunk->code = NULL;
     InitLines(&chunk->lines);
     InitValueArray(&chunk->constants);
-    chunk->cache = ALLOCATE(ObjString*, 10);
-    chunk->cache_size = 0;
+    InitIdentifiers(&chunk->identifiers);
 }
 
 void FreeChunk(Chunk* chunk) {
     FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
     FreeLines(&chunk->lines);
     FreeValueArray(&chunk->constants);
-    FREE_ARRAY(Obj*, chunk->cache, chunk->cache_size);
+    FreeIdentifiers(&chunk->identifiers);
     
     InitChunk(chunk);
 }
@@ -71,26 +70,12 @@ static void writeConstantLong(Chunk* chunk, int offset, int line) {
     }
 }
 
-size_t addCache(Chunk *chunk, ObjString *obj) {
-    for (size_t i = 0; i < chunk->cache_size; i++) {
-        if (chunk->cache[i] == obj) {
-            return i;
-        }
-    }
-    
-    size_t i = chunk->cache_size++;
-    chunk->cache[i] = obj;
-    return i;
+void ReadIdentifier(Chunk *chunk, ObjString *obj, int line) {
+    WriteChunk(chunk, OP_IDENT, line);
+    WriteChunk(chunk, AddIdentifier(&chunk->identifiers, obj), line);
 }
 
-void ReadCache(Chunk *chunk, ObjString *obj, int line) {
-    size_t i = addCache(chunk, obj);
-    WriteChunk(chunk, OP_RCACHE, line);
-    WriteChunk(chunk, i, line);
-}
-
-void WriteCache(Chunk *chunk, ObjString *obj, int line) {
-    size_t i = addCache(chunk, obj);
-    WriteChunk(chunk, OP_WCACHE, line);
-    WriteChunk(chunk, i, line);
+void WriteIdentifier(Chunk *chunk, ObjString *obj, int line) {
+    WriteChunk(chunk, OP_ASSIGN, line);
+    WriteChunk(chunk, AddIdentifier(&chunk->identifiers, obj), line);
 }
