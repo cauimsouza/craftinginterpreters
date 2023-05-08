@@ -43,6 +43,9 @@ typedef struct {
 
 typedef struct {
   Token name;
+  
+  // depth is the depth of the scope in which the local variable was declared or -1.
+  // depth is -1 iff the variable was added to the scope but is not yet ready for use.
   int depth;
 } Local;
 
@@ -194,6 +197,9 @@ static bool sameVariable(Token a, Token b) {
 static int findLocal(Token name) {
   for (int i = current->local_count - 1; i >= 0; i--) {
     if (sameVariable(name, current->locals[i].name)) {
+      if (current->locals[i].depth < 0) {
+        error("Can't read local variable being initialised.");
+      }
       return i;
     }
   }
@@ -446,13 +452,15 @@ static void variableDeclarationLocal() {
   
   Local *local = &current->locals[current->local_count++];
   local->name = name;
-  local->depth = current->scope_depth;
+  local->depth = -1;
   
   if (match(TOKEN_EQUAL)) {
     expression();
   } else {
     emitByte(OP_NIL);
   }
+  
+  local->depth = current->scope_depth;
   
   consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
 }
