@@ -42,7 +42,16 @@ typedef struct {
 } ParseRule;
 
 typedef struct {
+  Obj *name;
+  bool is_const;
+  
+  bool reassigned; // true iff the global was reassigned
+  Token reassign_token; // assignment operator (=) where the global was reassigned
+} Global;
+
+typedef struct {
   Token name;
+  bool is_const;
   
   // depth is the depth of the scope in which the local variable was declared or -1.
   // depth is -1 iff the variable was added to the scope but is not yet ready for use.
@@ -50,6 +59,10 @@ typedef struct {
 } Local;
 
 typedef struct {
+  Global *globals;
+  int global_count;
+  int global_capacity;
+  
   Local *locals;
   int local_count;
   int local_capacity;
@@ -60,12 +73,18 @@ typedef struct {
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
+Global globals[UINT8_MAX];
+uint8_t globals_count;
 
 static bool sameVariable(Token a, Token b) {
     return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
 }
 
 static void initCompiler(Compiler *compiler) {
+  compiler->globals = NULL;
+  compiler->global_count = 0;
+  compiler->global_capacity = 0;
+  
   compiler->locals = NULL;
   compiler->local_count = 0;
   compiler->local_capacity = 0;
@@ -74,6 +93,7 @@ static void initCompiler(Compiler *compiler) {
 }
 
 static void freeCompiler(Compiler *compiler) {
+  FREE_ARRAY(Global, compiler->globals, compiler->global_capacity);
   FREE_ARRAY(Local, compiler->locals, compiler->local_capacity);
   initCompiler(compiler);
 }
@@ -85,7 +105,7 @@ static void growLocals(Compiler *compiler) {
 
 // Returns true iff the local was successfully declared.
 // declareLocal fails iff there already is a local with the same name in the scope.
-static bool declareLocal(Compiler *compiler, Token name) {
+static bool declareLocal(Compiler *compiler, Token name, bool is_const) {
   for (int i = compiler->local_count - 1; i >= 0; i--) {
     Local *local = &compiler->locals[i];
     if (local->depth < compiler->scope_depth) {
@@ -103,11 +123,13 @@ static bool declareLocal(Compiler *compiler, Token name) {
   
   Local *local = &compiler->locals[compiler->local_count++];
   local->name = name;
+  local->is_const = is_const;
   local->depth = -1;
   
   return true;
 }
 
+// Returns the index of the local or -1 if the local doesn't exist.
 static int findLocal(Compiler *compiler, Token name) {
   for (int i = compiler->local_count - 1; i >= 0; i--) {
     if (sameVariable(name, compiler->locals[i].name)) {
@@ -120,6 +142,32 @@ static int findLocal(Compiler *compiler, Token name) {
 
 static void deleteLocal(Compiler *compiler) {
   compiler->local_count--;
+}
+
+static void growGlobals(Compiler *compiler) {
+  compiler->global_capacity = GROW_CAPACITY(compiler->global_capacity);
+  compiler->globals = GROW_ARRAY(Global, compiler->globals, compiler->global_count, compiler->global_capacity);
+}
+
+// getGlobal returns the global with the given name (if it already exists) or
+// creates a new global with the given name (if it doesn't exist yet).
+static Global *getGlobal(Compiler *compiler, Obj *name) {
+  for (uint8_t i = 0; i < compiler->global_count; i++) {
+    if (compiler->globals[i].name == name) {
+      return &compiler->globals[i];
+    }
+  }
+  
+  if (compiler->global_count == compiler->global_capacity) {
+    growGlobals(compiler);
+  }
+  
+  Global *global = &compiler->globals[compiler->global_count++];
+  global->name = name;
+  global->is_const = false;
+  global->reassigned = false;
+  
+  return global;
 }
 
 static Precedence nextPrecedence(Precedence precedence) {
@@ -248,37 +296,50 @@ static void string(bool can_assign) {
 }
 
 // Similar to identifier, but for cases where the identifier is in a local scope.
-static void identifierLocal(bool can_assign, int local_index) {
+static void identifierLocal(Compiler *compiler, bool can_assign, int index) {
+  if (compiler->locals[index].depth < 0) {
+      error("Can't read local variable being initialised.");
+      return;
+  }
+  
   if (can_assign && match(TOKEN_EQUAL)) {
+    if (compiler->locals[index].is_const) {
+      error("Can't reassign to const local variable.");
+      return;
+    }
+    
     parsePrecedence(PREC_ASSIGNMENT);
     
     emitByte(OP_ASSIGN_LOCAL);
-    emitByte(local_index);
+    emitByte(index);
     
     return;
   }
   
   emitByte(OP_IDENT_LOCAL);
-  emitByte(local_index);
+  emitByte(index);
 }
 
 static void identifier(bool can_assign) {
   int index = findLocal(current, parser.previous);
-  if (index >= 0 && current->locals[index].depth < 0) {
-      error("Can't read local variable being initialised.");
-      return;
-  } else if (index >= 0) {
-    identifierLocal(can_assign, index);
+  if (index >= 0) {
+    identifierLocal(current, can_assign, index);
     return;
   }
   
-  size_t length = parser.previous.length;
-  const char *chars = parser.previous.start;
-  emitConstant(FromObj(FromString(chars, length))); 
+  Obj *name = FromString(parser.previous.start, parser.previous.length);
+  emitConstant(FromObj(name)); 
   
   if (can_assign && match(TOKEN_EQUAL)) {
+    Token op = parser.previous;
+    
     parsePrecedence(PREC_ASSIGNMENT);
     emitByte(OP_ASSIGN_GLOBAL);
+    
+    Global *global = getGlobal(current, name);
+    global->reassigned = true;
+    global->reassign_token = op;
+    
     return;
   }
   
@@ -472,11 +533,11 @@ static void statement() {
   }
 }
 
-static void variableDeclarationLocal() {
+static void variableDeclarationLocal(bool is_const) {
   consume(TOKEN_IDENTIFIER, "Expect variable name.");
   Token name = parser.previous;
   
-  if (!declareLocal(current, name)) {
+  if (!declareLocal(current, name, is_const)) {
       error("Already a variable with this name in this scope."); 
   }
   
@@ -491,9 +552,9 @@ static void variableDeclarationLocal() {
   consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
 }
 
-static void variableDeclaration() {
+static void variableDeclaration(bool is_const) {
   if (current->scope_depth > 0) {
-    variableDeclarationLocal();   
+    variableDeclarationLocal(is_const);   
     return;
   }
   
@@ -502,7 +563,8 @@ static void variableDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect variable name.");
   size_t length = parser.previous.length;
   const char *chars = parser.previous.start;
-  emitConstant(FromObj(FromString(chars, length))); 
+  Obj *name = FromString(chars, length);
+  emitConstant(FromObj(name)); 
   
   if (match(TOKEN_EQUAL)) {
     expression();
@@ -513,11 +575,16 @@ static void variableDeclaration() {
   consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
   
   emitByte(OP_VAR_DECL);
+  
+  Global *global = getGlobal(current, name);
+  global->is_const = is_const;
 }
 
 static void declaration() {
   if (match(TOKEN_VAR)) {
-    variableDeclaration();
+    variableDeclaration(/*is_const=*/false);
+  } else if (match(TOKEN_CONST)) {
+    variableDeclaration(/*is_const=*/true);
   } else {
     statement(); 
   }
@@ -544,6 +611,12 @@ bool Compile(const char *source, Chunk *chunk) {
   }
   
   emitByte(OP_RETURN);
+  
+  for (uint8_t i = 0; i < compiler.global_count; i++) {
+    if (compiler.globals[i].is_const && compiler.globals[i].reassigned) {
+      errorAt(&compiler.globals[i].reassign_token, "Can't reassign to const global variable.");
+    }
+  }
   
   #ifdef DEBUG_PRINT_CODE
   if (!parser.had_error) {

@@ -115,6 +115,8 @@ static Token scanIdentifierOrKeyword() {
         type = TOKEN_TRUE;
     } else if (!strcmp(lexeme, "var")) {
         type = TOKEN_VAR;
+    } else if (!strcmp(lexeme, "const")) {
+        type = TOKEN_CONST;
     } else if (!strcmp(lexeme, "while")) {
         type = TOKEN_WHILE;
     }
