@@ -93,7 +93,7 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
         case OP_VAR_DECL:
             return simpleInstruction("OP_VAR_DECL", offset);
         case OP_IDENT_GLOBAL:
-            return simpleInstruction("OP_IDENTO", offset);
+            return simpleInstruction("OP_IDENT_GLOBAL", offset);
         case OP_IDENT_LOCAL:
             return byteInstructions("OP_IDENT_LOCAL", chunk, offset);
         case OP_ASSIGN_GLOBAL:
