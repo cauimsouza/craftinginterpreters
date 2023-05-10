@@ -536,13 +536,26 @@ static void ifStatement() {
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after if-condition expression.");
   
-  emitByte(OP_JUMP);
+  emitByte(OP_JUMP_IF_FALSE);
   emitByte(0);
-  uint8_t jump_ip = ip();
+  uint8_t false_ip = ip(); // Jump executed when the condition is false.
   
   statement();
   
-  emitByteAt(ip() - jump_ip, jump_ip - 1); 
+  if (!match(TOKEN_ELSE)) {
+    emitByteAt(ip() - false_ip, false_ip - 1); 
+    return;
+  }
+  
+  emitByte(OP_JUMP);
+  emitByte(0);
+  uint8_t true_ip = ip(); // Jump executed when the condition is true.
+  
+  emitByteAt(ip() - false_ip, false_ip - 1);
+  
+  statement();
+  
+  emitByteAt(ip() - true_ip, true_ip - 1);
 }
 
 static void statement() {

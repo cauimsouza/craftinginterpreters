@@ -102,6 +102,8 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return simpleInstruction("OP_ASSIGN_GLOBAL", offset);
         case OP_ASSIGN_LOCAL:
             return byteInstructions("OP_ASSIGN_LOCAL", chunk, offset);
+        case OP_JUMP_IF_FALSE:
+            return byteInstructions("OP_JUMP_IF_FALSE", chunk, offset);
         case OP_JUMP:
             return byteInstructions("OP_JUMP", chunk, offset);
         default:
