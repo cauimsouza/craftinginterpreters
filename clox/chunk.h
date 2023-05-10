@@ -34,6 +34,7 @@ typedef enum {
   OP_IDENT_LOCAL,
   OP_ASSIGN_GLOBAL,
   OP_ASSIGN_LOCAL,
+  OP_JUMP,
 } OpCode;
 
 typedef struct {

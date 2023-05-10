@@ -221,6 +221,13 @@ static InterpretResult run() {
                 vm.stack[i] = peek(0);
                 break;
             }
+            case OP_JUMP: {
+                uint8_t n = READ_BYTE();
+                if (!IsTruthy(pop())) {
+                    vm.ip += n;
+                }
+                break;
+            }
             case OP_RETURN:
                 return INTERPRET_OK;
         }

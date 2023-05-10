@@ -73,8 +73,6 @@ typedef struct {
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
-Global globals[UINT8_MAX];
-uint8_t globals_count;
 
 static bool sameVariable(Token a, Token b) {
     return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
@@ -236,6 +234,14 @@ static bool match(TokenType type) {
 
 static void emitByte(uint8_t byte) {
   WriteChunk(compilingChunk, byte, parser.previous.line);
+}
+
+static void emitByteAt(uint8_t byte, uint8_t address) {
+  compilingChunk->code[address] = byte;
+}
+
+static uint8_t ip() {
+  return compilingChunk->count;
 }
 
 static void emitConstant(Value value) {
@@ -525,6 +531,20 @@ static void block() {
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
+static void ifStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after if-condition expression.");
+  
+  emitByte(OP_JUMP);
+  emitByte(0);
+  uint8_t jump_ip = ip();
+  
+  statement();
+  
+  emitByteAt(ip() - jump_ip, jump_ip - 1); 
+}
+
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
@@ -532,6 +552,8 @@ static void statement() {
     beginScope();
     block();
     endScope();
+  } else if (match(TOKEN_IF)) {
+    ifStatement();
   } else {
     expressionStatement();
   }
