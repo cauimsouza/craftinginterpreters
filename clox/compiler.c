@@ -503,14 +503,18 @@ static void beginScope() {
 }
 
 static void endScope() {
+  uint8_t n = 0;
   for (; current->local_count > 0; deleteLocal(current)) {
     if (current->locals[current->local_count - 1].depth != current->scope_depth) {
       break;
     }
-    emitByte(OP_POP);
+    n++;
   }
   
   current->scope_depth--;
+  
+  emitByte(OP_POPN);
+  emitByte(n);
 }
 
 static void block() {

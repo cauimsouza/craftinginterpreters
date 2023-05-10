@@ -182,6 +182,13 @@ static InterpretResult run() {
             case OP_POP:
                 pop();
                 break;
+            case OP_POPN: {
+                uint8_t n = READ_BYTE();
+                for (uint8_t i = 0; i < n; i++) {
+                    pop();
+                }
+                break;
+            }
             case OP_VAR_DECL:
                 right = pop(); // value
                 left = pop(); // variable

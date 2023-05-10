@@ -90,6 +90,8 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return simpleInstruction("OP_PRINT", offset);
         case OP_POP:
             return simpleInstruction("OP_POP", offset);
+        case OP_POPN:
+            return byteInstructions("OP_POPN", chunk, offset);
         case OP_VAR_DECL:
             return simpleInstruction("OP_VAR_DECL", offset);
         case OP_IDENT_GLOBAL:
