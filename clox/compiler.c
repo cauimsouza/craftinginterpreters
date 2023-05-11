@@ -391,12 +391,6 @@ static void binary(bool can_assign) {
     case TOKEN_SLASH:
       emitByte(OP_DIVIDE);
       break;
-    case TOKEN_OR:
-      emitByte(OP_OR);
-      break;
-    case TOKEN_AND:
-      emitByte(OP_AND);
-      break;
     case TOKEN_BANG_EQUAL:
       emitByte(OP_NEQ);
       break;
@@ -416,6 +410,50 @@ static void binary(bool can_assign) {
       emitByte(OP_LESS_EQ);
       break;
   }
+}
+
+static void and(bool can_assign) {
+  // This will evaluate a && b as follows:
+  // - If the value at the top of the stack is falsey (the value of a), we leave
+  //     it at the top of the stack and jump to right after the code block that
+  //     evaluates b.
+  // - If the value at the top of the stack is truthy, we pop the stack and
+  //     continue the execution to the code block that evaluates b. At the end of
+  //     that block, the value of b will be at the top of the stack, which is the
+  //     result of a && b.
+  
+  emitByte(OP_JUMP_IF_FALSE);
+  emitByte(0);
+  uint8_t false_ip = ip();
+  
+  emitByte(OP_POP);
+  parsePrecedence(nextPrecedence(PREC_AND));
+  
+  emitByteAt(ip() - false_ip, false_ip - 1);
+}
+
+static void or(bool can_assign) {
+  // This will evaluate a or b as follows:
+  // - If the value at the top of the stack is falsey (the value of a), we jump
+  //     to the block that evaluates b, pop the stack, then execute that block, 
+  //     leaving the result at the top of the stack.
+  // - If the value at the top of the stack is truthy, we jump to right after
+  //     the block that evaluates b.
+  
+  emitByte(OP_JUMP_IF_FALSE);
+  emitByte(0);
+  uint8_t false_ip = ip();
+  
+  emitByte(OP_JUMP);
+  emitByte(0);
+  uint8_t true_ip = ip();
+  
+  emitByteAt(ip() - false_ip, false_ip - 1);
+  
+  emitByte(OP_POP); 
+  parsePrecedence(nextPrecedence(PREC_OR));
+  
+  emitByteAt(ip() - true_ip, true_ip - 1);
 }
 
 ParseRule rules[] = {
@@ -438,10 +476,10 @@ ParseRule rules[] = {
   [TOKEN_GREATER_EQUAL] = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_IDENTIFIER]    = {identifier,NULL, PREC_NONE},
+  [TOKEN_IDENTIFIER]    = {identifier,NULL,  PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TOKEN_AND]           = {NULL,     binary, PREC_AND},
+  [TOKEN_AND]           = {NULL,     and,    PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {boolean,  NULL,   PREC_NONE},
@@ -449,7 +487,7 @@ ParseRule rules[] = {
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {nil,      NULL,   PREC_NONE},
-  [TOKEN_OR]            = {NULL,     binary, PREC_OR},
+  [TOKEN_OR]            = {NULL,     or,     PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
@@ -540,20 +578,18 @@ static void ifStatement() {
   emitByte(0);
   uint8_t false_ip = ip(); // Jump executed when the condition is false.
   
+  emitByte(OP_POP);
   statement();
-  
-  if (!match(TOKEN_ELSE)) {
-    emitByteAt(ip() - false_ip, false_ip - 1); 
-    return;
-  }
-  
   emitByte(OP_JUMP);
   emitByte(0);
   uint8_t true_ip = ip(); // Jump executed when the condition is true.
   
   emitByteAt(ip() - false_ip, false_ip - 1);
   
-  statement();
+  emitByte(OP_POP);
+  if (match(TOKEN_ELSE)) {
+    statement();
+  }
   
   emitByteAt(ip() - true_ip, true_ip - 1);
 }

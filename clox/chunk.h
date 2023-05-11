@@ -13,8 +13,6 @@ typedef enum {
   OP_FALSE,
   OP_NEGATE,
   OP_NOT,
-  OP_OR,
-  OP_AND,
   OP_EQ,
   OP_NEQ,
   OP_LESS,

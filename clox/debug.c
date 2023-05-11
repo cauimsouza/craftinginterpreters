@@ -60,10 +60,6 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return simpleInstruction("OP_NEGATE", offset);
         case OP_NOT:
             return simpleInstruction("OP_NOT", offset);
-        case OP_OR:
-            return simpleInstruction("OP_OR", offset);
-        case OP_AND:
-            return simpleInstruction("OP_AND", offset);
         case OP_EQ:
             return simpleInstruction("OP_EQ", offset);
         case OP_NEQ:
