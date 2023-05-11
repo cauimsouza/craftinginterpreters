@@ -267,7 +267,7 @@ static int emitJump(OpCode jump_type) {
 // jump_instr is the address of the opcode of the jump instruction.
 // jump_dst is the address the VM should jump to.
 static void patchJump(int jump_instr, int jump_dst) {
-  int size = jump_dst - jump_instr - 3;
+  int16_t size = jump_dst - jump_instr - 3;
   emitByteAt(size & 0xFF, jump_instr + 1); // little endian
   size >>= 8;
   emitByteAt(size & 0xFF, jump_instr + 2);
@@ -598,6 +598,25 @@ static void ifStatement() {
   patchJump(true_jump, ip());
 }
 
+static void whileStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
+  
+  int cond_addr = ip();
+  expression();
+  
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after while-condition expression.");
+  
+  int false_jump = emitJump(OP_JUMP_IF_FALSE);
+  
+  emitByte(OP_POP);
+  statement();
+  int true_jump = emitJump(OP_JUMP);
+  patchJump(true_jump, cond_addr);
+  
+  patchJump(false_jump, ip()); 
+  emitByte(OP_POP);
+}
+
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
@@ -607,6 +626,8 @@ static void statement() {
     endScope();
   } else if (match(TOKEN_IF)) {
     ifStatement();
+  } else if (match(TOKEN_WHILE)) {
+    whileStatement();  
   } else {
     expressionStatement();
   }
