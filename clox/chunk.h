@@ -33,9 +33,9 @@ typedef enum {
   OP_ASSIGN_GLOBAL,
   OP_ASSIGN_LOCAL,
   
-  // Jumps if top of the stack is falsey. It has one 1B operand, the offset to move ip.
+  // Jumps if top of the stack is falsey. It has one 2B operand, the offset to move ip.
   OP_JUMP_IF_FALSE, 
-  // Jumps unconditionally. It has one 1B operand, the offset to move ip. 
+  // Jumps unconditionally. It has one 2B operand, the offset to move ip. 
   OP_JUMP,
 } OpCode;
 

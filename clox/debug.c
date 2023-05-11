@@ -35,6 +35,12 @@ static int byteInstructions(const char *name, Chunk *chunk, int offset) {
     return offset + 2;
 }
 
+static int shortInstructions(const char *name, Chunk *chunk, int offset) {
+    int operand = chunk->code[offset + 1] | chunk->code[offset + 2] << 8;
+    printf("%-16s %8d\n", name, operand);
+    return offset + 3;
+}
+
 int DisassembleInstruction(Chunk *chunk, int offset) {
     printf("%04d ", offset);
     
@@ -99,9 +105,9 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
         case OP_ASSIGN_LOCAL:
             return byteInstructions("OP_ASSIGN_LOCAL", chunk, offset);
         case OP_JUMP_IF_FALSE:
-            return byteInstructions("OP_JUMP_IF_FALSE", chunk, offset);
+            return shortInstructions("OP_JUMP_IF_FALSE", chunk, offset);
         case OP_JUMP:
-            return byteInstructions("OP_JUMP", chunk, offset);
+            return shortInstructions("OP_JUMP", chunk, offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;

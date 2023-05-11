@@ -63,6 +63,8 @@ static void concatenate() {
 
 static InterpretResult run() {
 #define READ_BYTE() (*vm.ip++)
+#define READ_SHORT() \
+    (vm.ip += 2, (uint16_t) (vm.ip[-2] | (vm.ip[-1] << 8)))
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 #define AS_STRING(value) ((ObjString*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
@@ -210,14 +212,14 @@ static InterpretResult run() {
                 break;
             }
             case OP_JUMP_IF_FALSE: {
-                uint8_t n = READ_BYTE();
+                uint16_t n = READ_SHORT();
                 if (!IsTruthy(peek(0))) {
                     vm.ip += n;
                 }
                 break;
             }
             case OP_JUMP:
-                vm.ip += READ_BYTE();
+                vm.ip += READ_SHORT();
                 break;
             case OP_RETURN:
                 return INTERPRET_OK;
@@ -226,6 +228,7 @@ static InterpretResult run() {
 
 #undef EXEC_NUM_BIN_OP
 #undef AS_STRING
+#undef READ_SHORT
 #undef READ_BYTE
 #undef READ_CONSTANT
 }

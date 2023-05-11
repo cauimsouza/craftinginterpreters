@@ -253,10 +253,13 @@ static void emitBoolean(bool boolean) {
   emitByte(byte);
 }
 
+// emitJump emits the byte instructions for a jump with a dummy operand value, 
+// and returns the address of the opcode.
 static int emitJump(OpCode jump_type) {
   emitByte(jump_type);
   emitByte(0);
-  return ip() - 2;
+  emitByte(0);
+  return ip() - 3;
 }
 
 // patchJump patches a previous issued jump instruction.
@@ -264,7 +267,10 @@ static int emitJump(OpCode jump_type) {
 // jump_instr is the address of the opcode of the jump instruction.
 // jump_dst is the address the VM should jump to.
 static void patchJump(int jump_instr, int jump_dst) {
-  emitByteAt(jump_dst - jump_instr - 2, jump_instr + 1);
+  int size = jump_dst - jump_instr - 3;
+  emitByteAt(size & 0xFF, jump_instr + 1); // little endian
+  size >>= 8;
+  emitByteAt(size & 0xFF, jump_instr + 2);
 }
 
 static ParseRule *getRule(TokenType token_type);
