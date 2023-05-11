@@ -240,7 +240,7 @@ static void emitByteAt(uint8_t byte, uint8_t address) {
   compilingChunk->code[address] = byte;
 }
 
-static uint8_t ip() {
+static int ip() {
   return compilingChunk->count;
 }
 
@@ -251,6 +251,20 @@ static void emitConstant(Value value) {
 static void emitBoolean(bool boolean) {
   uint8_t byte = boolean ? OP_TRUE : OP_FALSE;
   emitByte(byte);
+}
+
+static int emitJump(OpCode jump_type) {
+  emitByte(jump_type);
+  emitByte(0);
+  return ip() - 2;
+}
+
+// patchJump patches a previous issued jump instruction.
+//
+// jump_instr is the address of the opcode of the jump instruction.
+// jump_dst is the address the VM should jump to.
+static void patchJump(int jump_instr, int jump_dst) {
+  emitByteAt(jump_dst - jump_instr - 2, jump_instr + 1);
 }
 
 static ParseRule *getRule(TokenType token_type);
@@ -422,14 +436,10 @@ static void and(bool can_assign) {
   //     that block, the value of b will be at the top of the stack, which is the
   //     result of a && b.
   
-  emitByte(OP_JUMP_IF_FALSE);
-  emitByte(0);
-  uint8_t false_ip = ip();
-  
+  uint8_t false_jump = emitJump(OP_JUMP_IF_FALSE);
   emitByte(OP_POP);
   parsePrecedence(nextPrecedence(PREC_AND));
-  
-  emitByteAt(ip() - false_ip, false_ip - 1);
+  patchJump(false_jump, ip());
 }
 
 static void or(bool can_assign) {
@@ -440,20 +450,12 @@ static void or(bool can_assign) {
   // - If the value at the top of the stack is truthy, we jump to right after
   //     the block that evaluates b.
   
-  emitByte(OP_JUMP_IF_FALSE);
-  emitByte(0);
-  uint8_t false_ip = ip();
-  
-  emitByte(OP_JUMP);
-  emitByte(0);
-  uint8_t true_ip = ip();
-  
-  emitByteAt(ip() - false_ip, false_ip - 1);
-  
+  int false_jump = emitJump(OP_JUMP_IF_FALSE);
+  int true_jump = emitJump(OP_JUMP);
+  patchJump(false_jump, ip());
   emitByte(OP_POP); 
   parsePrecedence(nextPrecedence(PREC_OR));
-  
-  emitByteAt(ip() - true_ip, true_ip - 1);
+  patchJump(true_jump, ip());
 }
 
 ParseRule rules[] = {
@@ -574,24 +576,20 @@ static void ifStatement() {
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after if-condition expression.");
   
-  emitByte(OP_JUMP_IF_FALSE);
-  emitByte(0);
-  uint8_t false_ip = ip(); // Jump executed when the condition is false.
+  int false_jump = emitJump(OP_JUMP_IF_FALSE);
   
   emitByte(OP_POP);
   statement();
-  emitByte(OP_JUMP);
-  emitByte(0);
-  uint8_t true_ip = ip(); // Jump executed when the condition is true.
+  int true_jump = emitJump(OP_JUMP);
   
-  emitByteAt(ip() - false_ip, false_ip - 1);
+  patchJump(false_jump, ip());
   
   emitByte(OP_POP);
   if (match(TOKEN_ELSE)) {
     statement();
   }
   
-  emitByteAt(ip() - true_ip, true_ip - 1);
+  patchJump(true_jump, ip());
 }
 
 static void statement() {
