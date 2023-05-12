@@ -538,6 +538,53 @@ static void synchronise() {
   }
 }
 
+static void variableDeclarationLocal(bool is_const) {
+  consume(TOKEN_IDENTIFIER, "Expect variable name.");
+  Token name = parser.previous;
+  
+  if (!declareLocal(current, name, is_const)) {
+      error("Already a variable with this name in this scope."); 
+  }
+  
+  if (match(TOKEN_EQUAL)) {
+    expression();
+  } else {
+    emitByte(OP_NIL);
+  }
+  
+  current->locals[current->local_count - 1].depth = current->scope_depth;
+  
+  consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
+}
+
+static void variableDeclaration(bool is_const) {
+  if (current->scope_depth > 0) {
+    variableDeclarationLocal(is_const);   
+    return;
+  }
+  
+  // Variable declaration at the global scope.
+  
+  consume(TOKEN_IDENTIFIER, "Expect variable name.");
+  size_t length = parser.previous.length;
+  const char *chars = parser.previous.start;
+  Obj *name = FromString(chars, length);
+  emitConstant(FromObj(name)); 
+  
+  if (match(TOKEN_EQUAL)) {
+    expression();
+  } else {
+    emitByte(OP_NIL);
+  }
+  
+  consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
+  
+  emitByte(OP_VAR_DECL);
+  
+  Global *global = getGlobal(current, name);
+  global->is_const = is_const;
+}
+
 static void printStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
@@ -617,6 +664,62 @@ static void whileStatement() {
   emitByte(OP_POP);
 }
 
+static void forStatement() {
+  // A for loop has three clauses, all optional:
+  // - An initiliaser that can be either a variable declaration or an expression.
+  //   It runs only once, at the beginning of the loop.
+  // - A condition clause, executed _after_ the initiliaser and _before_ each iteration.
+  // - An increment expression, which runs _after_ each iteration.
+  
+  beginScope();
+  
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
+  
+  if (match(TOKEN_VAR)) {
+    variableDeclarationLocal(/*is_const=*/false);
+  } else if (match(TOKEN_CONST)) {
+    variableDeclarationLocal(/*is_const=*/true);
+  } else if (match(TOKEN_SEMICOLON)) {
+    // do nothing
+  } else {
+    expressionStatement();
+  }
+  
+  int loop_start = ip();
+  int block_end = -1;
+  if (!check(TOKEN_SEMICOLON)) {
+    expression(); // condition expression
+    block_end = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+  }
+  consume(TOKEN_SEMICOLON, "Expect ';' after for-condition.");
+  
+  int end_block_target = loop_start; // if no increment expression, jump to the condition
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    int body_jump = emitJump(OP_JUMP);
+    
+    end_block_target = ip();
+    expression();
+    emitByte(OP_POP); // expression() leaves the value at the top of the stack, so we pop it
+    int addr = emitJump(OP_JUMP);
+    patchJump(addr, loop_start); // back to condition expression
+    
+    patchJump(body_jump, ip());
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after for-increment.");
+  
+  statement();
+  int body_end_jump = emitJump(OP_JUMP);
+  patchJump(body_end_jump, end_block_target); // to the increment expression
+  
+  if (block_end != -1) {
+    patchJump(block_end, ip()); 
+    emitByte(OP_POP);
+  }
+  
+  endScope();
+}
+
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
@@ -628,56 +731,11 @@ static void statement() {
     ifStatement();
   } else if (match(TOKEN_WHILE)) {
     whileStatement();  
+  } else if (match(TOKEN_FOR)) {
+    forStatement();  
   } else {
     expressionStatement();
   }
-}
-
-static void variableDeclarationLocal(bool is_const) {
-  consume(TOKEN_IDENTIFIER, "Expect variable name.");
-  Token name = parser.previous;
-  
-  if (!declareLocal(current, name, is_const)) {
-      error("Already a variable with this name in this scope."); 
-  }
-  
-  if (match(TOKEN_EQUAL)) {
-    expression();
-  } else {
-    emitByte(OP_NIL);
-  }
-  
-  current->locals[current->local_count - 1].depth = current->scope_depth;
-  
-  consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
-}
-
-static void variableDeclaration(bool is_const) {
-  if (current->scope_depth > 0) {
-    variableDeclarationLocal(is_const);   
-    return;
-  }
-  
-  // Variable declaration at the global scope.
-  
-  consume(TOKEN_IDENTIFIER, "Expect variable name.");
-  size_t length = parser.previous.length;
-  const char *chars = parser.previous.start;
-  Obj *name = FromString(chars, length);
-  emitConstant(FromObj(name)); 
-  
-  if (match(TOKEN_EQUAL)) {
-    expression();
-  } else {
-    emitByte(OP_NIL);
-  }
-  
-  consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
-  
-  emitByte(OP_VAR_DECL);
-  
-  Global *global = getGlobal(current, name);
-  global->is_const = is_const;
 }
 
 static void declaration() {

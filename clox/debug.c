@@ -36,7 +36,7 @@ static int byteInstructions(const char *name, Chunk *chunk, int offset) {
 }
 
 static int shortInstructions(const char *name, Chunk *chunk, int offset) {
-    int operand = chunk->code[offset + 1] | chunk->code[offset + 2] << 8;
+    int16_t operand = chunk->code[offset + 1] | chunk->code[offset + 2] << 8;
     printf("%-16s %8d\n", name, operand);
     return offset + 3;
 }
