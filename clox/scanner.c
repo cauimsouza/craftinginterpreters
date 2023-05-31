@@ -119,6 +119,12 @@ static Token scanIdentifierOrKeyword() {
         type = TOKEN_CONST;
     } else if (!strcmp(lexeme, "while")) {
         type = TOKEN_WHILE;
+    } else if (!strcmp(lexeme, "switch")) {
+        type = TOKEN_SWITCH;
+    } else if (!strcmp(lexeme, "case")) {
+        type = TOKEN_CASE;
+    } else if (!strcmp(lexeme, "default")) {
+        type = TOKEN_DEFAULT;
     }
     
     return makeToken(type);
@@ -242,6 +248,8 @@ Token ScanToken() {
             return makeToken(TOKEN_SLASH);
         case '*':
             return makeToken(TOKEN_STAR);
+        case ':':
+            return makeToken(TOKEN_COLON);
         case '!':
             if (match('=')) {
                 return makeToken(TOKEN_BANG_EQUAL);

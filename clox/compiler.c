@@ -720,6 +720,69 @@ static void forStatement() {
   endScope();
 }
 
+int jmps[10];
+int jmps_size;
+
+static void switchStatement() {
+  // We assume the following:
+  // - There is at least one "case" clause.
+  // - There is always a "default" clause, and it's always the last clause.
+  // - There is no fallthrough and no "break" statements.
+  
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after ')'.");
+  
+  jmps_size = 0;
+  
+  bool first_case = true;
+  int jmp_instr = 0; // Jump from a previous 'case' clause that didn't match
+  while (match(TOKEN_CASE)) {
+    if (!first_case) {
+      patchJump(jmp_instr, ip());
+      emitByte(OP_POP); // The result of the previous case test, which is always 'false'.
+    }
+    first_case = false;
+    
+    emitByte(OP_DUPLICATE);
+    expression();
+    consume(TOKEN_COLON, "Expect ':' after 'case' expression.");
+    emitByte(OP_EQ);
+    jmp_instr = emitJump(OP_JUMP_IF_FALSE); // To the next 'case'
+    emitByte(OP_POPN); // Pops the 'true' from the case test, and the value of the switch expression.
+    emitByte(2);
+    
+    while (true) {
+      if (check(TOKEN_CASE) || check(TOKEN_DEFAULT)) {
+        // When we stop assuming there's always a default, we have to add one check in the test above.
+        break; 
+      }
+      statement();
+    }
+    
+    jmps[jmps_size++] = emitJump(OP_JUMP); // To right after the switch
+  }
+  
+  consume(TOKEN_DEFAULT, "Expect 'default' clause.");
+  consume(TOKEN_COLON, "Expect ':' after 'default'.");
+  patchJump(jmp_instr, ip());
+  emitByte(OP_POPN);
+  emitByte(2);
+  while (true) {
+    if (check(TOKEN_RIGHT_BRACE)) {
+      break;
+    }
+    statement();
+  }
+  
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' at the end of 'switch' statement.");
+  
+  for (int i = 0; i < jmps_size; i++) {
+    patchJump(jmps[i], ip());
+  }
+}
+
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
@@ -733,6 +796,8 @@ static void statement() {
     whileStatement();  
   } else if (match(TOKEN_FOR)) {
     forStatement();  
+  } else if (match(TOKEN_SWITCH)) {
+    switchStatement();
   } else {
     expressionStatement();
   }

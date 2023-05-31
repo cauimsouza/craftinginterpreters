@@ -37,6 +37,8 @@ typedef enum {
   OP_JUMP_IF_FALSE, 
   // Jumps unconditionally. It has one 2B operand, the offset to move ip. 
   OP_JUMP,
+  
+  OP_DUPLICATE, // Duplicate the value at the top of the stack. Only used for "switch".
 } OpCode;
 
 typedef struct {

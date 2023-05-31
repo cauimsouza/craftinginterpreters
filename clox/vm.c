@@ -221,6 +221,9 @@ static InterpretResult run() {
             case OP_JUMP:
                 vm.ip += READ_SHORT();
                 break;
+            case OP_DUPLICATE:
+                push(peek(0));
+                break;
             case OP_RETURN:
                 return INTERPRET_OK;
         }
