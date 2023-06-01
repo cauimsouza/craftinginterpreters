@@ -748,13 +748,15 @@ static void switchStatement() {
     emitByte(OP_POPN); // Pops the 'true' from the case test, and the value of the switch expression.
     emitByte(2);
     
+    beginScope();
     while (true) {
       if (check(TOKEN_CASE) || check(TOKEN_DEFAULT) || check(TOKEN_RIGHT_BRACE)) {
         // When we stop assuming there's always a default, we have to add one check in the test above.
         break; 
       }
-      statement();
+      declaration();
     }
+    endScope();
     
     if (jmps_size == jmps_cap) {
       jmps_cap = GROW_CAPACITY(jmps_cap);
@@ -775,12 +777,14 @@ static void switchStatement() {
   if (match(TOKEN_DEFAULT)) {
     consume(TOKEN_COLON, "Expect ':' after 'default'.");
     
+    beginScope();
     while (true) {
       if (check(TOKEN_RIGHT_BRACE)) {
         break;
       }
-      statement();
+      declaration();
     }
+    endScope();
   }
   
   consume(TOKEN_RIGHT_BRACE, "Expect '}' at the end of 'switch' statement.");
@@ -788,7 +792,10 @@ static void switchStatement() {
   for (int i = 0; i < jmps_size; i++) {
     patchJump(jmps[i], ip());
   }
+  
   FREE_ARRAY(int, jmps, jmps_cap);
+  
+  endScope();
 }
 
 static void statement() {
