@@ -725,7 +725,7 @@ int jmps_size;
 
 static void switchStatement() {
   // We assume the following:
-  // - There is always a "default" clause, and it's always the last clause.
+  // - If there is a "default" clause, it's always the last clause.
   // - There is no fallthrough and no "break" statements.
   
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
@@ -753,7 +753,7 @@ static void switchStatement() {
     emitByte(2);
     
     while (true) {
-      if (check(TOKEN_CASE) || check(TOKEN_DEFAULT)) {
+      if (check(TOKEN_CASE) || check(TOKEN_DEFAULT) || check(TOKEN_RIGHT_BRACE)) {
         // When we stop assuming there's always a default, we have to add one check in the test above.
         break; 
       }
@@ -763,8 +763,7 @@ static void switchStatement() {
     jmps[jmps_size++] = emitJump(OP_JUMP); // To right after the switch
   }
   
-  consume(TOKEN_DEFAULT, "Expect 'default' clause.");
-  consume(TOKEN_COLON, "Expect ':' after 'default'.");
+  // This is executed if none of the 'case' expressions matched the 'switch' expression.
   if (jmps_size > 0) {
     patchJump(jmp_instr, ip());
     emitByte(OP_POPN);
@@ -772,11 +771,16 @@ static void switchStatement() {
   } else {
     emitByte(OP_POP);
   }
-  while (true) {
-    if (check(TOKEN_RIGHT_BRACE)) {
-      break;
+  
+  if (match(TOKEN_DEFAULT)) {
+    consume(TOKEN_COLON, "Expect ':' after 'default'.");
+    
+    while (true) {
+      if (check(TOKEN_RIGHT_BRACE)) {
+        break;
+      }
+      statement();
     }
-    statement();
   }
   
   consume(TOKEN_RIGHT_BRACE, "Expect '}' at the end of 'switch' statement.");
