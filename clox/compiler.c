@@ -720,9 +720,6 @@ static void forStatement() {
   endScope();
 }
 
-int jmps[10];
-int jmps_size;
-
 static void switchStatement() {
   // We assume the following:
   // - If there is a "default" clause, it's always the last clause.
@@ -733,16 +730,15 @@ static void switchStatement() {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
   consume(TOKEN_LEFT_BRACE, "Expect '{' after ')'.");
   
-  jmps_size = 0;
-  
-  bool first_case = true;
+  int jmps_cap = 8;
+  int jmps_size = 0;
+  int *jmps = ALLOCATE(int, jmps_cap);
   int jmp_instr = 0; // Jump from a previous 'case' clause that didn't match
   while (match(TOKEN_CASE)) {
-    if (!first_case) {
+    if (jmps_size > 0) {
       patchJump(jmp_instr, ip());
       emitByte(OP_POP); // The result of the previous case test, which is always 'false'.
     }
-    first_case = false;
     
     emitByte(OP_DUPLICATE);
     expression();
@@ -760,6 +756,10 @@ static void switchStatement() {
       statement();
     }
     
+    if (jmps_size == jmps_cap) {
+      jmps_cap = GROW_CAPACITY(jmps_cap);
+      jmps = GROW_ARRAY(int, jmps, jmps_size, jmps_cap);
+    }
     jmps[jmps_size++] = emitJump(OP_JUMP); // To right after the switch
   }
   
@@ -788,6 +788,7 @@ static void switchStatement() {
   for (int i = 0; i < jmps_size; i++) {
     patchJump(jmps[i], ip());
   }
+  FREE_ARRAY(int, jmps, jmps_cap);
 }
 
 static void statement() {
