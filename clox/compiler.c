@@ -725,7 +725,6 @@ int jmps_size;
 
 static void switchStatement() {
   // We assume the following:
-  // - There is at least one "case" clause.
   // - There is always a "default" clause, and it's always the last clause.
   // - There is no fallthrough and no "break" statements.
   
@@ -766,9 +765,13 @@ static void switchStatement() {
   
   consume(TOKEN_DEFAULT, "Expect 'default' clause.");
   consume(TOKEN_COLON, "Expect ':' after 'default'.");
-  patchJump(jmp_instr, ip());
-  emitByte(OP_POPN);
-  emitByte(2);
+  if (jmps_size > 0) {
+    patchJump(jmp_instr, ip());
+    emitByte(OP_POPN);
+    emitByte(2);
+  } else {
+    emitByte(OP_POP);
+  }
   while (true) {
     if (check(TOKEN_RIGHT_BRACE)) {
       break;
