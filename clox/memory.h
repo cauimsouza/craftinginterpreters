@@ -11,7 +11,7 @@
         sizeof(type) * (newCount))
         
 #define FREE_ARRAY(type, pointer, oldCount) \
-    GROW_ARRAY(type, pointer, sizeof(type) * (oldCount), 0);
+    GROW_ARRAY(type, pointer, oldCount, 0);
     
 #define FREE(type, pointer) \
     Reallocate(pointer, sizeof(type), 0);
