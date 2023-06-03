@@ -872,8 +872,13 @@ static void continueStatement() {
   
   consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
   
-  emitByte(OP_POPN);
-  emitByte(numLocals(current, loop->depth + 1));
+  int n = numLocals(current, loop->depth + 1);
+  if (n == 1) {
+    emitByte(OP_POP);
+  } else if (n > 1) {
+    emitByte(OP_POPN);
+    emitByte(n);
+  }
   
   int instr = emitJump(OP_JUMP);
   patchJump(instr, loop->address);
