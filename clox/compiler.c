@@ -866,7 +866,7 @@ static void switchStatement() {
 static void continueStatement() {
   Loop *loop = enclosingLoop(current);
   if (loop == NULL) {
-    errorAtCurrent("'continue' statement not enclosed in a loop.");
+    error("'continue' statement not enclosed in a loop.");
     return;
   }
   
