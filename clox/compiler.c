@@ -53,10 +53,18 @@ typedef struct {
   Token name;
   bool is_const;
   
-  // depth is the depth of the scope in which the local variable was declared or -1.
+  // depth of the scope in which the local variable was declared or -1.
   // depth is -1 iff the variable was added to the scope but is not yet ready for use.
   int depth;
 } Local;
+
+typedef struct {
+  // address of the destination of 'continue' statements immediately enclosed by the loop
+  int address;
+  
+  // depth of the scope where the 'while' or 'for' appears
+  int depth; 
+} Loop;
 
 typedef struct {
   Global *globals;
@@ -66,6 +74,10 @@ typedef struct {
   Local *locals;
   int local_count;
   int local_capacity;
+  
+  Loop *loops;
+  int loop_count;
+  int loop_capacity;
   
   int scope_depth;
 } Compiler;
@@ -87,12 +99,17 @@ static void initCompiler(Compiler *compiler) {
   compiler->local_count = 0;
   compiler->local_capacity = 0;
   
+  compiler->loops = NULL;
+  compiler->loop_count = 0;
+  compiler->loop_capacity = 0;
+  
   compiler->scope_depth = 0;
 }
 
 static void freeCompiler(Compiler *compiler) {
   FREE_ARRAY(Global, compiler->globals, compiler->global_capacity);
   FREE_ARRAY(Local, compiler->locals, compiler->local_capacity);
+  FREE_ARRAY(Loop, compiler->loops, compiler->loop_capacity);
   initCompiler(compiler);
 }
 
@@ -142,6 +159,19 @@ static void deleteLocal(Compiler *compiler) {
   compiler->local_count--;
 }
 
+// numLocals returns the number of locals with at least the given depth.
+static int numLocals(Compiler *compiler, int depth) {
+  int n = 0;
+  for (int i = compiler->local_count - 1; i >= 0; i--) {
+    if (compiler->locals[i].depth < depth) {
+      break;
+    }
+    n++;
+  }
+  
+  return n;
+}
+
 static void growGlobals(Compiler *compiler) {
   compiler->global_capacity = GROW_CAPACITY(compiler->global_capacity);
   compiler->globals = GROW_ARRAY(Global, compiler->globals, compiler->global_count, compiler->global_capacity);
@@ -166,6 +196,33 @@ static Global *getGlobal(Compiler *compiler, Obj *name) {
   global->reassigned = false;
   
   return global;
+}
+
+static void growLoops(Compiler *compiler) {
+  compiler->loop_capacity = GROW_CAPACITY(compiler->loop_capacity);
+  compiler->loops = GROW_ARRAY(Loop, compiler->loops, compiler->loop_count, compiler->loop_capacity);
+}
+
+static void declareLoop(Compiler *compiler, int address) {
+  if (compiler->loop_count == compiler->loop_capacity) {
+    growLoops(compiler);
+  }
+  
+  Loop *loop = &compiler->loops[compiler->loop_count++];
+  loop->address = address;
+  loop->depth = compiler->scope_depth;
+}
+
+static void deleteLoop(Compiler *compiler) {
+  compiler->loop_count--;
+}
+
+static Loop *enclosingLoop(Compiler *compiler) {
+  if (compiler->loop_count == 0) {
+    return NULL;
+  }
+  
+  return &compiler->loops[compiler->loop_count - 1];
 }
 
 static Precedence nextPrecedence(Precedence precedence) {
@@ -653,6 +710,7 @@ static void whileStatement() {
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
   
   int cond_addr = ip();
+  declareLoop(current, cond_addr); // for 'continue' statements
   expression();
   
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after while-condition expression.");
@@ -661,6 +719,7 @@ static void whileStatement() {
   
   emitByte(OP_POP);
   statement();
+  deleteLoop(current); // for 'continue' statements
   int true_jump = emitJump(OP_JUMP);
   patchJump(true_jump, cond_addr);
   
@@ -712,7 +771,9 @@ static void forStatement() {
   }
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after for-increment.");
   
+  declareLoop(current, end_block_target); // for 'continue' statements
   statement();
+  deleteLoop(current); // for 'continue' statements
   int body_end_jump = emitJump(OP_JUMP);
   patchJump(body_end_jump, end_block_target); // to the increment expression
   
@@ -802,6 +863,22 @@ static void switchStatement() {
   endScope();
 }
 
+static void continueStatement() {
+  Loop *loop = enclosingLoop(current);
+  if (loop == NULL) {
+    errorAtCurrent("'continue' statement not enclosed in a loop.");
+    return;
+  }
+  
+  consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
+  
+  emitByte(OP_POPN);
+  emitByte(numLocals(current, loop->depth + 1));
+  
+  int instr = emitJump(OP_JUMP);
+  patchJump(instr, loop->address);
+}
+
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
@@ -815,6 +892,8 @@ static void statement() {
     forStatement();  
   } else if (match(TOKEN_SWITCH)) {
     switchStatement();
+  } else if (match(TOKEN_CONTINUE)) {
+    continueStatement();  
   } else {
     expressionStatement();
   }

@@ -125,6 +125,8 @@ static Token scanIdentifierOrKeyword() {
         type = TOKEN_CASE;
     } else if (!strcmp(lexeme, "default")) {
         type = TOKEN_DEFAULT;
+    } else if (!strcmp(lexeme, "continue")) {
+        type = TOKEN_CONTINUE;
     }
     
     return makeToken(type);
