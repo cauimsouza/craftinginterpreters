@@ -58,12 +58,23 @@ typedef struct {
   int depth;
 } Local;
 
+typedef enum {
+  LOOP_WHILE,
+  LOOP_FOR,
+} LoopType;
+
 typedef struct {
+  LoopType type;
+  
   // address of the destination of 'continue' statements immediately enclosed by the loop
   int address;
   
   // depth of the scope where the 'while' or 'for' appears
   int depth; 
+  
+  int *breaks;
+  int break_count;
+  int break_capacity;
 } Loop;
 
 typedef struct {
@@ -203,18 +214,40 @@ static void growLoops(Compiler *compiler) {
   compiler->loops = GROW_ARRAY(Loop, compiler->loops, compiler->loop_count, compiler->loop_capacity);
 }
 
-static void declareLoop(Compiler *compiler, int address) {
+static void declareLoop(Compiler *compiler, LoopType type, int address, int depth) {
   if (compiler->loop_count == compiler->loop_capacity) {
     growLoops(compiler);
   }
   
   Loop *loop = &compiler->loops[compiler->loop_count++];
+  loop->type = type;
   loop->address = address;
-  loop->depth = compiler->scope_depth;
+  loop->depth = depth;
+  loop->breaks = NULL;
+  loop->break_count = 0;
+  loop->break_capacity = 0;
 }
 
-static void deleteLoop(Compiler *compiler) {
+static void patchJump(int jump_instr, int jump_dst);
+
+static void deleteLoop(Compiler *compiler, int address_end) {
+  Loop *loop = &compiler->loops[compiler->loop_count - 1];
+  for (int i = 0; i < loop->break_count; i++) {
+    patchJump(loop->breaks[i], address_end);
+  }
+  
+  FREE_ARRAY(int, loop->breaks, loop->break_capacity);
+  
   compiler->loop_count--;
+}
+
+static void scheduleBreakJump(Loop *loop, int jmp_instr) {
+  if (loop->break_count == loop->break_capacity) {
+    loop->break_capacity = GROW_CAPACITY(loop->break_capacity);
+    loop->breaks = GROW_ARRAY(int, loop->breaks, loop->break_count, loop->break_capacity);
+  }
+  
+  loop->breaks[loop->break_count++] = jmp_instr;
 }
 
 static Loop *enclosingLoop(Compiler *compiler) {
@@ -710,7 +743,7 @@ static void whileStatement() {
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
   
   int cond_addr = ip();
-  declareLoop(current, cond_addr); // for 'continue' statements
+  declareLoop(current, LOOP_WHILE, cond_addr, current->scope_depth);
   expression();
   
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after while-condition expression.");
@@ -719,12 +752,13 @@ static void whileStatement() {
   
   emitByte(OP_POP);
   statement();
-  deleteLoop(current); // for 'continue' statements
   int true_jump = emitJump(OP_JUMP);
   patchJump(true_jump, cond_addr);
   
   patchJump(false_jump, ip()); 
   emitByte(OP_POP);
+  
+  deleteLoop(current, ip());
 }
 
 static void forStatement() {
@@ -771,9 +805,9 @@ static void forStatement() {
   }
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after for-increment.");
   
-  declareLoop(current, end_block_target); // for 'continue' statements
+  declareLoop(current, LOOP_FOR, end_block_target, current->scope_depth - 1);
+  
   statement();
-  deleteLoop(current); // for 'continue' statements
   int body_end_jump = emitJump(OP_JUMP);
   patchJump(body_end_jump, end_block_target); // to the increment expression
   
@@ -783,6 +817,8 @@ static void forStatement() {
   }
   
   endScope();
+  
+  deleteLoop(current, ip());
 }
 
 static void switchStatement() {
@@ -872,7 +908,16 @@ static void continueStatement() {
   
   consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
   
-  int n = numLocals(current, loop->depth + 1);
+  int n;
+  if (loop->type == LOOP_WHILE) {
+    n = numLocals(current, loop->depth + 1);
+  } else if (loop->type == LOOP_FOR) {
+    n = numLocals(current, loop->depth + 2);
+  } else {
+    error("Unsupported loop type.");
+    return;
+  }
+  
   if (n == 1) {
     emitByte(OP_POP);
   } else if (n > 1) {
@@ -882,6 +927,32 @@ static void continueStatement() {
   
   int instr = emitJump(OP_JUMP);
   patchJump(instr, loop->address);
+}
+
+static void breakStatement() {
+  Loop *loop = enclosingLoop(current);
+  if (loop == NULL) {
+    error("'break' statement not enclosed in a loop.");
+    return;
+  }
+  
+  consume(TOKEN_SEMICOLON, "Expect ';' after 'break'.");
+  
+  if (loop->type != LOOP_WHILE && loop->type != LOOP_FOR) {
+    error("Unsupported loop type.");
+    return;
+  }
+  int n = numLocals(current, loop->depth + 1);
+  
+  if (n == 1) {
+    emitByte(OP_POP);
+  } else if (n > 1) {
+    emitByte(OP_POPN);
+    emitByte(n);
+  }
+  
+  int instr = emitJump(OP_JUMP);
+  scheduleBreakJump(loop, instr);
 }
 
 static void statement() {
@@ -899,6 +970,8 @@ static void statement() {
     switchStatement();
   } else if (match(TOKEN_CONTINUE)) {
     continueStatement();  
+  } else if (match(TOKEN_BREAK)) {
+    breakStatement();  
   } else {
     expressionStatement();
   }

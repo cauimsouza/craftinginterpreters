@@ -127,6 +127,8 @@ static Token scanIdentifierOrKeyword() {
         type = TOKEN_DEFAULT;
     } else if (!strcmp(lexeme, "continue")) {
         type = TOKEN_CONTINUE;
+    } else if (!strcmp(lexeme, "break")) {
+        type = TOKEN_BREAK;
     }
     
     return makeToken(type);
