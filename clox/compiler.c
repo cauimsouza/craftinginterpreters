@@ -617,11 +617,15 @@ static void endScope() {
 }
 
 static void block() {
+  beginScope();
+  
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
     declaration();
   }
   
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+  
+  endScope();
 }
 
 static void ifStatement() {
@@ -802,9 +806,7 @@ static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
-    beginScope();
     block();
-    endScope();
   } else if (match(TOKEN_IF)) {
     ifStatement();
   } else if (match(TOKEN_WHILE)) {
