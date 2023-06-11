@@ -67,6 +67,7 @@ static InterpretResult run() {
     (vm.ip += 2, (int16_t) (vm.ip[-2] | (vm.ip[-1] << 8)))
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 #define AS_STRING(value) ((ObjString*) (value).as.obj)
+#define AS_FUNCTION(value) ((ObjFunction*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
         Value right = pop(); \
@@ -224,12 +225,36 @@ static InterpretResult run() {
             case OP_DUPLICATE:
                 push(peek(0));
                 break;
-            case OP_RETURN:
-                return INTERPRET_OK;
+            case OP_CALL: {
+                ObjFunction *function = AS_FUNCTION(pop());
+                vm.caller_chunk = vm.chunk;
+                vm.caller_ip = vm.ip;
+                vm.chunk = &function->chunk;
+                vm.ip = function->chunk.code;
+                break;
+            }
+            case OP_RETURN: {
+                if (vm.caller_chunk == NULL) {
+                    return INTERPRET_OK;
+                }
+                
+                Value returnValue = pop();
+                uint8_t n = READ_BYTE();
+                for (uint8_t i = 0; i < n; i++) {
+                    pop();
+                }
+                push(returnValue);
+                
+                vm.chunk = vm.caller_chunk;
+                vm.ip = vm.caller_ip;
+                vm.caller_chunk = NULL;
+                vm.caller_ip = NULL;
+            }
         }
     }
 
 #undef EXEC_NUM_BIN_OP
+#undef AS_FUNCTION
 #undef AS_STRING
 #undef READ_SHORT
 #undef READ_BYTE

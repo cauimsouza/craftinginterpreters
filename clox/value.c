@@ -4,6 +4,9 @@
 #include "value.h"
 #include "memory.h"
 
+bool ObjsEqual(const Obj *a, const Obj *b);
+void PrintObj(const Obj *obj);
+
 bool ValuesEqual(Value a, Value b) {
     return
         IsBoolean(a) && IsBoolean(b) && a.as.boolean == b.as.boolean ||

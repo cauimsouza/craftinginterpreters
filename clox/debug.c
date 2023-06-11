@@ -30,7 +30,7 @@ static int constantLongInstruction(const char *name, Chunk *chunk, int offset) {
     return offset + 4;
 }
 
-static int byteInstructions(const char *name, Chunk *chunk, int offset) {
+static int byteInstruction(const char *name, Chunk *chunk, int offset) {
     printf("%-16s %8d\n", name, chunk->code[offset + 1]);
     return offset + 2;
 }
@@ -86,30 +86,32 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return simpleInstruction("OP_MULTIPLY", offset);
         case OP_DIVIDE:
             return simpleInstruction("OP_DIVIDE", offset);
-        case OP_RETURN:
-            return simpleInstruction("OP_RETURN", offset);
         case OP_PRINT:
             return simpleInstruction("OP_PRINT", offset);
         case OP_POP:
             return simpleInstruction("OP_POP", offset);
         case OP_POPN:
-            return byteInstructions("OP_POPN", chunk, offset);
+            return byteInstruction("OP_POPN", chunk, offset);
         case OP_VAR_DECL:
             return simpleInstruction("OP_VAR_DECL", offset);
         case OP_IDENT_GLOBAL:
             return simpleInstruction("OP_IDENT_GLOBAL", offset);
         case OP_IDENT_LOCAL:
-            return byteInstructions("OP_IDENT_LOCAL", chunk, offset);
+            return byteInstruction("OP_IDENT_LOCAL", chunk, offset);
         case OP_ASSIGN_GLOBAL:
             return simpleInstruction("OP_ASSIGN_GLOBAL", offset);
         case OP_ASSIGN_LOCAL:
-            return byteInstructions("OP_ASSIGN_LOCAL", chunk, offset);
+            return byteInstruction("OP_ASSIGN_LOCAL", chunk, offset);
         case OP_JUMP_IF_FALSE:
             return shortInstructions("OP_JUMP_IF_FALSE", chunk, offset);
         case OP_JUMP:
             return shortInstructions("OP_JUMP", chunk, offset);
         case OP_DUPLICATE:
             return simpleInstruction("OP_DUPLICATE", offset);
+        case OP_CALL:
+            return simpleInstruction("OP_CALL", offset);
+        case OP_RETURN:
+            return byteInstruction("OP_RETURN", chunk, offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;

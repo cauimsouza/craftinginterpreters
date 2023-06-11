@@ -5,6 +5,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "memory.h"
+#include "object.h"
 #include "scanner.h"
 #include "value.h"
 
@@ -90,12 +91,17 @@ typedef struct {
   int loop_count;
   int loop_capacity;
   
+  // depth of the scope in which the function being declared is,
+  // or -1 if no function is being declared
+  int function_depth;
   int scope_depth;
 } Compiler;
 
 Parser parser;
 Compiler *current = NULL;
 Chunk *compilingChunk;
+
+ObjFunction *global_func = NULL;
 
 static bool sameVariable(Token a, Token b) {
     return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
@@ -114,6 +120,7 @@ static void initCompiler(Compiler *compiler) {
   compiler->loop_count = 0;
   compiler->loop_capacity = 0;
   
+  compiler->function_depth = -1;
   compiler->scope_depth = 0;
 }
 
@@ -166,12 +173,12 @@ static int findLocal(Compiler *compiler, Token name) {
   return -1;
 }
 
-static void deleteLocal(Compiler *compiler) {
-  compiler->local_count--;
+static void deleteLocal(Compiler *compiler, uint8_t n) {
+  compiler->local_count -= n;
 }
 
 // numLocals returns the number of locals with at least the given depth.
-static int numLocals(Compiler *compiler, int depth) {
+static uint8_t numLocals(Compiler *compiler, int depth) {
   int n = 0;
   for (int i = compiler->local_count - 1; i >= 0; i--) {
     if (compiler->locals[i].depth < depth) {
@@ -361,6 +368,25 @@ static void patchJump(int jump_instr, int jump_dst) {
   emitByteAt(size & 0xFF, jump_instr + 1); // little endian
   size >>= 8;
   emitByteAt(size & 0xFF, jump_instr + 2);
+}
+
+static void beginScope() {
+  current->scope_depth++;
+}
+
+static void endScope() {
+  uint8_t n = numLocals(current, current->scope_depth);
+  emitByte(OP_POPN);
+  emitByte(n);
+  
+  deleteLocal(current, n); 
+  current->scope_depth--;
+}
+
+static void emitReturn() {
+  uint8_t n = numLocals(current, current->function_depth + 1);
+  emitByte(OP_RETURN);
+  emitByte(n);
 }
 
 static ParseRule *getRule(TokenType token_type);
@@ -554,8 +580,13 @@ static void or(bool can_assign) {
   patchJump(true_jump, ip());
 }
 
+static void call(bool can_assign) {
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after '('.");
+  emitByte(OP_CALL); 
+}
+
 ParseRule rules[] = {
-  [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
+  [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
@@ -675,6 +706,48 @@ static void variableDeclaration(bool is_const) {
   global->is_const = is_const;
 }
 
+static void functionDeclaration() {
+  ObjFunction *function = NewFunction();
+  
+  consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
+  Token name = parser.previous; 
+  function->name = (ObjString*) FromString(name.start, name.length); 
+  
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters list.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after ')'.");
+  
+  Chunk *chunk = compilingChunk;
+  compilingChunk = &function->chunk;
+  
+  int prev_function_depth = current->function_depth;
+  current->function_depth = current->scope_depth;
+  beginScope();
+  // TODO: Allow functions without 'return' statements.
+  while (!check(TOKEN_EOF) && !check(TOKEN_RIGHT_BRACE)) {
+    declaration();
+  }
+  
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after ')'.");
+  
+  emitConstant(FromNil());
+  emitReturn(); 
+  
+  // TODO: We don't need the OP_POPN instruction that endScope emits.
+  endScope();
+  current->function_depth = prev_function_depth;
+  
+  // TODO: Do sth about getGlobal.
+  
+  compilingChunk = chunk;
+  
+  emitConstant(FromObj((Obj*) function->name));
+  emitConstant(FromObj((Obj*) function));
+  emitByte(OP_VAR_DECL); 
+  
+  global_func = function;
+}
+
 static void printStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
@@ -685,25 +758,6 @@ static void expressionStatement() {
   expression();
   consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
   emitByte(OP_POP);
-}
-
-static void beginScope() {
-  current->scope_depth++;
-}
-
-static void endScope() {
-  uint8_t n = 0;
-  for (; current->local_count > 0; deleteLocal(current)) {
-    if (current->locals[current->local_count - 1].depth != current->scope_depth) {
-      break;
-    }
-    n++;
-  }
-  
-  current->scope_depth--;
-  
-  emitByte(OP_POPN);
-  emitByte(n);
 }
 
 static void block() {
@@ -908,7 +962,7 @@ static void continueStatement() {
   
   consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
   
-  int n;
+  uint8_t n;
   if (loop->type == LOOP_WHILE) {
     n = numLocals(current, loop->depth + 1);
   } else if (loop->type == LOOP_FOR) {
@@ -942,7 +996,7 @@ static void breakStatement() {
     error("Unsupported loop type.");
     return;
   }
-  int n = numLocals(current, loop->depth + 1);
+  uint8_t n = numLocals(current, loop->depth + 1);
   
   if (n == 1) {
     emitByte(OP_POP);
@@ -953,6 +1007,17 @@ static void breakStatement() {
   
   int instr = emitJump(OP_JUMP);
   scheduleBreakJump(loop, instr);
+}
+
+static void returnStatement() {
+  if (match(TOKEN_SEMICOLON))  {
+    emitConstant(FromNil());
+  } else {
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after return expression.");
+  }
+  
+  emitReturn();
 }
 
 static void statement() {
@@ -972,6 +1037,8 @@ static void statement() {
     continueStatement();  
   } else if (match(TOKEN_BREAK)) {
     breakStatement();  
+  } else if (match(TOKEN_RETURN)) {
+    returnStatement();  
   } else {
     expressionStatement();
   }
@@ -982,6 +1049,8 @@ static void declaration() {
     variableDeclaration(/*is_const=*/false);
   } else if (match(TOKEN_CONST)) {
     variableDeclaration(/*is_const=*/true);
+  } else if (match(TOKEN_FUN)) {
+    functionDeclaration();
   } else {
     statement(); 
   }
@@ -1008,6 +1077,7 @@ bool Compile(const char *source, Chunk *chunk) {
   }
   
   emitByte(OP_RETURN);
+  emitByte(0);
   
   for (uint8_t i = 0; i < compiler.global_count; i++) {
     if (compiler.globals[i].is_const && compiler.globals[i].reassigned) {
@@ -1018,6 +1088,7 @@ bool Compile(const char *source, Chunk *chunk) {
   #ifdef DEBUG_PRINT_CODE
   if (!parser.had_error) {
     DisassembleChunk(compilingChunk, "code");
+    DisassembleChunk(&global_func->chunk, "function");
   }
   #endif
   

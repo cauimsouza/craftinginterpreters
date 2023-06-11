@@ -78,6 +78,18 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     return (Obj*) obj;
 }
 
+ObjFunction *NewFunction() {
+    ObjFunction *function = ALLOCATE(ObjFunction, 1);
+    function->obj.type = OBJ_FUNCTION;
+    function->obj.next = vm.objects;
+    vm.objects = &function->obj;
+    function->arity = 0;
+    InitChunk(&function->chunk);
+    function->name = NULL;
+    
+    return function;
+}
+
 bool ObjsEqual(const Obj *a, const Obj *b) {
     if (a->type != b->type) {
         return false;
@@ -93,11 +105,23 @@ void FreeObj(Obj *obj) {
         FREE(ObjString, (ObjString*) obj);
         return;
     }
+    
+    if (obj->type == OBJ_FUNCTION) {
+        // We don't need to free the function name here because the GC will do that for us.
+        ObjFunction *function = (ObjFunction*) obj;
+        FreeChunk(&function->chunk);
+        FREE(ObjFunction, function);
+        return;
+    }
 }
 
 void PrintObj(const Obj *obj) {
     if (obj->type == OBJ_STRING) {
         ObjString *objs = (ObjString*) obj;
         printf("%s", objs->chars);
+    }
+    
+    if (obj->type == OBJ_FUNCTION) {
+        printf("<fn %s>", ((ObjFunction*) obj)->name->chars); 
     }
 }

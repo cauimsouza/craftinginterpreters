@@ -39,6 +39,7 @@ typedef enum {
   OP_JUMP,
   
   OP_DUPLICATE, // Duplicate the value at the top of the stack. Only used for "switch".
+  OP_CALL,
 } OpCode;
 
 typedef struct {

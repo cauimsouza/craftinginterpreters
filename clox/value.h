@@ -2,7 +2,8 @@
 #define clox_value_h
 
 #include "common.h"
-#include "object.h"
+
+typedef struct Obj Obj;
 
 typedef enum {
     VAL_BOOL,
@@ -28,7 +29,6 @@ static inline bool IsBoolean(Value value);
 static inline bool IsNumber(Value value);
 static inline bool IsNil(Value value);
 static inline bool IsObj(Value value);
-static inline bool IsString(Value value);
 static inline bool IsTruthy(Value value);
 bool ValuesEqual(Value a, Value b);
 void PrintValue(Value value);
@@ -84,10 +84,6 @@ static inline bool IsNil(Value value) {
 
 static inline bool IsObj(Value value) {
     return value.type == VAL_OBJ;
-}
-
-static inline bool IsString(Value value) {
-    return value.type == VAL_OBJ && value.as.obj->type == OBJ_STRING;
 }
 
 static inline bool IsTruthy(Value value) {

@@ -10,6 +10,8 @@
 typedef struct {
   Chunk *chunk;
   uint8_t *ip;
+  Chunk *caller_chunk;
+  uint8_t *caller_ip;
   Value stack[STACK_MAX];
   Value *stackTop;
   Table strings;
