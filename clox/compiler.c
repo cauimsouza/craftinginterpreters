@@ -5,6 +5,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "memory.h"
+#include "native.h"
 #include "object.h"
 #include "scanner.h"
 #include "value.h"
@@ -42,6 +43,11 @@ typedef struct {
   Precedence precedence;
 } ParseRule;
 
+typedef enum {
+  TYPE_FUNCTION,
+  TYPE_SCRIPT
+} FunctionType;
+
 typedef struct {
   Obj *name;
   bool is_const;
@@ -78,7 +84,11 @@ typedef struct {
   int break_capacity;
 } Loop;
 
-typedef struct {
+typedef struct Compiler {
+  struct Compiler *enclosing;
+  ObjFunction *function;
+  FunctionType type;
+  
   Global *globals;
   int global_count;
   int global_capacity;
@@ -99,15 +109,18 @@ typedef struct {
 
 Parser parser;
 Compiler *current = NULL;
-Chunk *compilingChunk;
 
-ObjFunction *global_func = NULL;
-
-static bool sameVariable(Token a, Token b) {
-    return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
+static Chunk *currentChunk() {
+  return &current->function->chunk;
 }
 
-static void initCompiler(Compiler *compiler) {
+static void growLocals(Compiler *compiler);
+
+static void initCompiler(Compiler *compiler, FunctionType type) {
+  compiler->enclosing = current;
+  compiler->function = NULL; // We nullify the field before initialising it for the GC
+  compiler->type = type;
+  
   compiler->globals = NULL;
   compiler->global_count = 0;
   compiler->global_capacity = 0;
@@ -122,18 +135,52 @@ static void initCompiler(Compiler *compiler) {
   
   compiler->function_depth = -1;
   compiler->scope_depth = 0;
+  compiler->function = NewFunction();
+  current = compiler;
+  
+  // The function being compiled itself is the first local.
+  growLocals(current);
+  Local *local = &current->locals[current->local_count++];
+  local->depth = 0;
+  local->name.start = "";
+  local->name.length = 0;
 }
 
 static void freeCompiler(Compiler *compiler) {
   FREE_ARRAY(Global, compiler->globals, compiler->global_capacity);
   FREE_ARRAY(Local, compiler->locals, compiler->local_capacity);
   FREE_ARRAY(Loop, compiler->loops, compiler->loop_capacity);
-  initCompiler(compiler);
+  initCompiler(compiler, TYPE_SCRIPT);
+}
+
+static void nil(bool can_assign);
+static void emitByte(uint8_t byte);
+  
+static ObjFunction *endCompiler() {
+  nil(/*can_assign=*/false);
+  emitByte(OP_RETURN);
+  
+  ObjFunction *function = current->function;
+  
+  #ifdef DEBUG_PRINT_CODE
+  if (!parser.had_error) {
+    // The implicit function we use for the top-level code doesn't have name.
+    DisassembleChunk(currentChunk(), function->name != NULL ? function->name->chars : "<script>");
+  }
+  #endif
+  
+  current = current->enclosing;
+  
+  return function;
 }
 
 static void growLocals(Compiler *compiler) {
   compiler->local_capacity = GROW_CAPACITY(compiler->local_capacity);
   compiler->locals = GROW_ARRAY(Local, compiler->locals, compiler->local_count, compiler->local_capacity);
+}
+
+static bool sameVariable(Token a, Token b) {
+    return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
 }
 
 // Returns true iff the local was successfully declared.
@@ -330,19 +377,19 @@ static bool match(TokenType type) {
 }
 
 static void emitByte(uint8_t byte) {
-  WriteChunk(compilingChunk, byte, parser.previous.line);
+  WriteChunk(currentChunk(), byte, parser.previous.line);
 }
 
 static void emitByteAt(uint8_t byte, uint8_t address) {
-  compilingChunk->code[address] = byte;
+  currentChunk()->code[address] = byte;
 }
 
 static int ip() {
-  return compilingChunk->count;
+  return currentChunk()->count;
 }
 
 static void emitConstant(Value value) {
-  WriteConstant(compilingChunk, value, parser.previous.line);
+  WriteConstant(currentChunk(), value, parser.previous.line);
 }
 
 static void emitBoolean(bool boolean) {
@@ -381,12 +428,6 @@ static void endScope() {
   
   deleteLocal(current, n); 
   current->scope_depth--;
-}
-
-static void emitReturn() {
-  uint8_t n = numLocals(current, current->function_depth + 1);
-  emitByte(OP_RETURN);
-  emitByte(n);
 }
 
 static ParseRule *getRule(TokenType token_type);
@@ -581,8 +622,20 @@ static void or(bool can_assign) {
 }
 
 static void call(bool can_assign) {
-  consume(TOKEN_RIGHT_PAREN, "Expect ')' after '('.");
+  uint8_t argc = 0;
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      if (argc == 255) {
+        error("Can't have more than 255 arguments.");
+      }
+      argc++;
+      expression();  
+    } while (match(TOKEN_COMMA)); 
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+  
   emitByte(OP_CALL); 
+  emitByte(argc);
 }
 
 ParseRule rules[] = {
@@ -702,50 +755,9 @@ static void variableDeclaration(bool is_const) {
   
   emitByte(OP_VAR_DECL);
   
+  // TODO: Fail if a global variable is declared twice.
   Global *global = getGlobal(current, name);
   global->is_const = is_const;
-}
-
-static void functionDeclaration() {
-  ObjFunction *function = NewFunction();
-  
-  consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
-  Token name = parser.previous; 
-  function->name = (ObjString*) FromString(name.start, name.length); 
-  
-  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
-  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters list.");
-  consume(TOKEN_LEFT_BRACE, "Expect '{' after ')'.");
-  
-  Chunk *chunk = compilingChunk;
-  compilingChunk = &function->chunk;
-  
-  int prev_function_depth = current->function_depth;
-  current->function_depth = current->scope_depth;
-  beginScope();
-  // TODO: Allow functions without 'return' statements.
-  while (!check(TOKEN_EOF) && !check(TOKEN_RIGHT_BRACE)) {
-    declaration();
-  }
-  
-  consume(TOKEN_RIGHT_BRACE, "Expect '}' after ')'.");
-  
-  emitConstant(FromNil());
-  emitReturn(); 
-  
-  // TODO: We don't need the OP_POPN instruction that endScope emits.
-  endScope();
-  current->function_depth = prev_function_depth;
-  
-  // TODO: Do sth about getGlobal.
-  
-  compilingChunk = chunk;
-  
-  emitConstant(FromObj((Obj*) function->name));
-  emitConstant(FromObj((Obj*) function));
-  emitByte(OP_VAR_DECL); 
-  
-  global_func = function;
 }
 
 static void printStatement() {
@@ -761,15 +773,11 @@ static void expressionStatement() {
 }
 
 static void block() {
-  beginScope();
-  
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
     declaration();
   }
   
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
-  
-  endScope();
 }
 
 static void ifStatement() {
@@ -1009,22 +1017,85 @@ static void breakStatement() {
   scheduleBreakJump(loop, instr);
 }
 
-static void returnStatement() {
-  if (match(TOKEN_SEMICOLON))  {
-    emitConstant(FromNil());
+static void functionDeclaration() {
+  consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
+  Token name = parser.previous; 
+  Obj *name_obj = FromString(name.start, name.length);
+  
+  // Declare the function before defining it because the function might be recursive.
+  bool is_global = false;
+  if (current->scope_depth > 0) {
+    // Function declared inside a block or inside the body of another function
+    if (!declareLocal(current, name, /*is_const=*/ false)) {
+        error("Already an identifier with this name in this scope."); 
+    }
+    current->locals[current->local_count - 1].depth = current->scope_depth;
   } else {
-    expression();
-    consume(TOKEN_SEMICOLON, "Expect ';' after return expression.");
+    // Function declared in the global scope
+    is_global = true;
+    Global *global = getGlobal(current, name_obj);
+    global->is_const = false;
+    emitConstant(FromObj(name_obj)); 
   }
   
-  emitReturn();
+  Compiler compiler;
+  initCompiler(&compiler, TYPE_FUNCTION);
+  compiler.function->name = (ObjString*) name_obj;
+  beginScope();
+  
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+  
+  // Parse parameters
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      current->function->arity++;
+      if (current->function->arity > 255) {
+        errorAtCurrent("Can't have more than 255 parameters.");
+      }
+      
+      consume(TOKEN_IDENTIFIER, "Expect parameter name.");
+      Token par = parser.previous;
+      if (!declareLocal(current, par, /*is_const=*/ false)) {
+          error("Already a parameter with this name in parameter list."); 
+      }
+      current->locals[current->local_count - 1].depth = current->scope_depth;
+    } while (match(TOKEN_COMMA)); 
+  }
+  
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters list.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after ')'.");
+  block();
+  
+  ObjFunction *function = endCompiler();
+  emitConstant(FromObj((Obj*) function));
+  if (is_global) {
+    emitByte(OP_VAR_DECL); 
+  }
+}
+
+static void returnStatement() {
+  if (current->type == TYPE_SCRIPT) {
+    error("Can't return from top-level code.");  
+  }
+  
+  if (match(TOKEN_SEMICOLON)) {
+    nil(/*can_assign=*/ false);
+    emitByte(OP_RETURN);
+    return;
+  }
+  
+  expression();
+  consume(TOKEN_SEMICOLON, "Expect ';' after return expression.");
+  emitByte(OP_RETURN);
 }
 
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
+    beginScope();
     block();
+    endScope();
   } else if (match(TOKEN_IF)) {
     ifStatement();
   } else if (match(TOKEN_WHILE)) {
@@ -1060,15 +1131,13 @@ static void declaration() {
   }
 }
 
-bool Compile(const char *source, Chunk *chunk) {
+ObjFunction *Compile(const char *source) {
   InitScanner(source);
   parser.had_error = false;
   parser.panic_mode = false;
-  compilingChunk = chunk;
   
   Compiler compiler;
-  initCompiler(&compiler);
-  current = &compiler;
+  initCompiler(&compiler, TYPE_SCRIPT);
   
   advance();
   
@@ -1076,23 +1145,15 @@ bool Compile(const char *source, Chunk *chunk) {
     declaration();
   }
   
-  emitByte(OP_RETURN);
-  emitByte(0);
-  
-  for (uint8_t i = 0; i < compiler.global_count; i++) {
-    if (compiler.globals[i].is_const && compiler.globals[i].reassigned) {
-      errorAt(&compiler.globals[i].reassign_token, "Can't reassign to const global variable.");
+  for (uint8_t i = 0; i < current->global_count; i++) {
+    if (current->globals[i].is_const && current->globals[i].reassigned) {
+      errorAt(&current->globals[i].reassign_token, "Can't reassign to const global variable.");
     }
   }
   
-  #ifdef DEBUG_PRINT_CODE
-  if (!parser.had_error) {
-    DisassembleChunk(compilingChunk, "code");
-    DisassembleChunk(&global_func->chunk, "function");
-  }
-  #endif
+  ObjFunction *function = endCompiler();
   
   freeCompiler(&compiler);
   
-  return !parser.had_error;
+  return parser.had_error ? NULL : function;
 }

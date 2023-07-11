@@ -3,7 +3,8 @@
 
 #include "common.h"
 #include "chunk.h"
+#include "object.h"
 
-bool Compile(const char *source, Chunk *chunk);
+ObjFunction *Compile(const char *source);
 
 #endif

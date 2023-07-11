@@ -1,12 +1,15 @@
 #ifndef clox_object_h
 #define clox_object_h
 
+#include <stdio.h>
+
 #include "chunk.h"
 #include "common.h"
 
 typedef enum {
     OBJ_STRING,
     OBJ_FUNCTION,
+    OBJ_NATIVE,
 } ObjType;
 
 struct Obj {
@@ -38,9 +41,20 @@ typedef struct {
 ObjFunction *NewFunction();
 static inline bool IsFunction(Value value);
 
+typedef Value (*NativeFn) (int argc, Value *argv);
+
+typedef struct {
+    Obj obj;
+    NativeFn function;
+} ObjNative;
+
+ObjNative *NewNative(NativeFn function);
+static inline bool IsNative(Value value);
+
 bool ObjsEqual(const Obj *a, const Obj *b);
 void FreeObj(Obj *obj);
 void PrintObj(const Obj *obj);
+void FPrintObj(FILE *stream, const Obj *obj);
 
 static inline bool IsString(Value value) {
     return value.type == VAL_OBJ && value.as.obj->type == OBJ_STRING;
@@ -48,6 +62,10 @@ static inline bool IsString(Value value) {
 
 static inline bool IsFunction(Value value) {
     return value.type == VAL_OBJ && value.as.obj->type == OBJ_FUNCTION;
+}
+
+static inline bool IsNative(Value value) {
+    return value.type == VAL_OBJ && value.as.obj->type == OBJ_NATIVE;
 }
 
 #endif

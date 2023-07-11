@@ -5,15 +5,21 @@
 #include "object.h"
 #include "table.h"
 
-#define STACK_MAX 256
+#define FRAMES_MAX 64
+#define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
 
 typedef struct {
-  Chunk *chunk;
+  ObjFunction *function;
   uint8_t *ip;
-  Chunk *caller_chunk;
-  uint8_t *caller_ip;
+  Value *slots;
+} CallFrame;
+
+typedef struct {
+  CallFrame frames[FRAMES_MAX];
+  int frame_count;
+  
   Value stack[STACK_MAX];
-  Value *stackTop;
+  Value *stack_top;
   Table strings;
   Table globals;
   Obj *objects;
@@ -21,7 +27,7 @@ typedef struct {
 
 typedef enum {
     INTERPRET_OK,
-    INTERPRET_COMPILER_ERROR,
+    INTERPRET_COMPILE_ERROR,
     INTERPRET_RUNTIME_ERROR
 } InterpretResult;
 

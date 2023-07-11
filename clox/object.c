@@ -90,13 +90,25 @@ ObjFunction *NewFunction() {
     return function;
 }
 
+ObjNative *NewNative(NativeFn function) {
+    ObjNative *native = ALLOCATE(ObjNative, 1);
+    native->obj.type = OBJ_NATIVE;
+    native->function = function;
+}
+
 bool ObjsEqual(const Obj *a, const Obj *b) {
     if (a->type != b->type) {
         return false;
     }
+    
     if (a->type == OBJ_STRING) {
         return a == b;
     }
+    
+    if (a->type == OBJ_NATIVE) {
+        return ((ObjNative*) a)->function == ((ObjNative*) b)->function;
+    }
+    
     return false;
 }
 
@@ -113,15 +125,36 @@ void FreeObj(Obj *obj) {
         FREE(ObjFunction, function);
         return;
     }
+    
+    if (obj->type == OBJ_NATIVE) {
+        FREE(ObjNative, (ObjNative*) obj);
+        return;
+    }
 }
 
 void PrintObj(const Obj *obj) {
+    FPrintObj(stdout, obj);
+}
+
+void FPrintObj(FILE *stream, const Obj *obj) {
     if (obj->type == OBJ_STRING) {
         ObjString *objs = (ObjString*) obj;
-        printf("%s", objs->chars);
+        fprintf(stream, "%s", objs->chars);
+        return;
     }
     
     if (obj->type == OBJ_FUNCTION) {
-        printf("<fn %s>", ((ObjFunction*) obj)->name->chars); 
+        ObjFunction *function = (ObjFunction*) obj;
+        if (function->name == NULL) {
+            fprintf(stream, "<script>");
+            return;
+        }
+        fprintf(stream, "<fn %s>", function->name->chars); 
+        return;
+    }
+    
+    if (obj->type == OBJ_NATIVE) {
+        fprintf(stream, "<native>");
+        return;
     }
 }

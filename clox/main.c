@@ -58,7 +58,7 @@ static void runFile(const char *path) {
     InterpretResult result = Interpret(source);
     free(source);
     
-    if (result == INTERPRET_COMPILER_ERROR) {
+    if (result == INTERPRET_COMPILE_ERROR) {
         exit(65);
     }
     if (result == INTERPRET_RUNTIME_ERROR) {
