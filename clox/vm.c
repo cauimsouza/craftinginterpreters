@@ -16,11 +16,11 @@ static void resetStack() {
 
 static void defineNatives() {
     ObjString *name_obj = (ObjString*) FromString("rand", 4);
-    Value value = FromObj((Obj*) NewNative(Rand));
+    Value value = FromObj((Obj*) NewNative(Rand, 0));
     Insert(&vm.globals, name_obj, value);
     
     name_obj = (ObjString*) FromString("clock", 5);
-    value = FromObj((Obj*) NewNative(Clock));
+    value = FromObj((Obj*) NewNative(Clock, 0));
     Insert(&vm.globals, name_obj, value);
 }
 
@@ -91,6 +91,7 @@ static InterpretResult run() {
 #define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 #define AS_STRING(value) ((ObjString*) (value).as.obj)
 #define AS_FUNCTION(value) ((ObjFunction*) (value).as.obj)
+#define AS_NATIVE(value) ((ObjNative*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
         Value right = pop(); \
@@ -258,8 +259,13 @@ static InterpretResult run() {
                 }
                 
                 if (IsNative(called_value)) {
-                    NativeFn native = ((ObjNative*) called_value.as.obj)->function;
-                    Value result = native(argc, vm.stack_top - argc);
+                    ObjNative *native_obj = AS_NATIVE(called_value);
+                    if (argc != native_obj->arity) {
+                        runtimeError("Invalid number of arguments.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    NativeFn fn = native_obj->function;
+                    Value result = fn(argc, vm.stack_top - argc);
                     vm.stack_top -= argc + 1;
                     push(result);
                     break;
@@ -303,6 +309,7 @@ static InterpretResult run() {
     }
 
 #undef EXEC_NUM_BIN_OP
+#undef AS_NATIVE
 #undef AS_FUNCTION
 #undef AS_STRING
 #undef READ_SHORT

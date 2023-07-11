@@ -90,9 +90,10 @@ ObjFunction *NewFunction() {
     return function;
 }
 
-ObjNative *NewNative(NativeFn function) {
+ObjNative *NewNative(NativeFn function, int arity) {
     ObjNative *native = ALLOCATE(ObjNative, 1);
     native->obj.type = OBJ_NATIVE;
+    native->arity = arity;
     native->function = function;
 }
 
