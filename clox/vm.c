@@ -22,6 +22,14 @@ static void defineNatives() {
     name_obj = (ObjString*) FromString("clock", 5);
     value = FromObj((Obj*) NewNative(Clock, 0));
     Insert(&vm.globals, name_obj, value);
+    
+    name_obj = (ObjString*) FromString("sqrt", 4);
+    value = FromObj((Obj*) NewNative(Sqrt, 1));
+    Insert(&vm.globals, name_obj, value);
+    
+    name_obj = (ObjString*) FromString("len", 3);
+    value = FromObj((Obj*) NewNative(Len, 1));
+    Insert(&vm.globals, name_obj, value);
 }
 
 void InitVM() {
@@ -264,10 +272,15 @@ static InterpretResult run() {
                         runtimeError("Invalid number of arguments.");
                         return INTERPRET_RUNTIME_ERROR;
                     }
+                    
                     NativeFn fn = native_obj->function;
-                    Value result = fn(argc, vm.stack_top - argc);
+                    ValueOpt result = fn(argc, vm.stack_top - argc);
+                    if (result.error) {
+                        runtimeError("Call to native function failed.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     vm.stack_top -= argc + 1;
-                    push(result);
+                    push(result.value);
                     break;
                 }
                 

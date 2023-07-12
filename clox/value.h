@@ -21,6 +21,11 @@ typedef struct {
     } as;
 } Value;
 
+typedef struct {
+    Value value; // Undefined behaviour if error == true
+    bool error;
+} ValueOpt;
+
 static inline Value FromBoolean(bool boolean);
 static inline Value FromDouble(double number);
 static inline Value FromNil();

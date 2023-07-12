@@ -5,6 +5,7 @@
 
 #include "chunk.h"
 #include "common.h"
+#include "value.h"
 
 typedef enum {
     OBJ_STRING,
@@ -41,14 +42,15 @@ typedef struct {
 ObjFunction *NewFunction();
 static inline bool IsFunction(Value value);
 
-typedef Value (*NativeFn) (int argc, Value *argv);
+typedef ValueOpt (*NativeFn) (int argc, Value *argv);
 
 typedef struct {
     Obj obj;
+    int arity;
     NativeFn function;
 } ObjNative;
 
-ObjNative *NewNative(NativeFn function);
+ObjNative *NewNative(NativeFn function, int arity);
 static inline bool IsNative(Value value);
 
 bool ObjsEqual(const Obj *a, const Obj *b);

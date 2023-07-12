@@ -1,14 +1,48 @@
+#include <math.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "native.h"
-#include "time.h"
 #include "value.h"
+#include "object.h"
 
-Value Rand(int argc, Value *argv) {
-    int result = rand();
-    return FromDouble(result);
+ValueOpt Rand(int argc, Value *argv) {
+    return (ValueOpt) {
+        .value = FromDouble(rand()),
+        .error = false
+    };
 }
 
-Value Clock(int argc, Value *argv) {
-    return FromDouble((double) clock() / CLOCKS_PER_SEC);
+ValueOpt Clock(int argc, Value *argv) {
+    return (ValueOpt) {
+        .value = FromDouble((double) clock() / CLOCKS_PER_SEC),
+        .error = false
+    };
+}
+
+ValueOpt Sqrt(int argc, Value *argv) {
+    Value arg = argv[0];
+    if (!IsNumber(arg) || arg.as.number < 0) {
+        return (ValueOpt) {
+            .error = true
+        };
+    }
+    
+    return (ValueOpt) {
+        .value = FromDouble(sqrt(arg.as.number)),
+        .error = false
+    };
+}
+
+ValueOpt Len(int argc, Value *argv) {
+    Value arg = argv[0];
+    if (!IsString(arg)) {
+        return (ValueOpt) {
+            .error = true
+        };
+    }
+    return (ValueOpt) {
+        .value = FromDouble(((ObjString*) arg.as.obj)->length),
+        .error = false
+    };
 }
