@@ -93,9 +93,15 @@ static void concatenate() {
 static InterpretResult run() {
     CallFrame *frame = &vm.frames[vm.frame_count - 1];
     
-#define READ_BYTE() (*frame->ip++)
+    // We could avoid declaring a local variable 'ip' and just access the field 'ip' through 'frame'.
+    // However, since 'ip' is used a lot, holding it in a local variable and using the 'register' hint
+    // might make the compiler store it in a register rather than in the main memory, speeding up execution.
+    // We need to be careful to load and store 'ip' back into the correct CallFrame when starting and ending function calls.
+    register uint8_t *ip = frame->ip;
+    
+#define READ_BYTE() (*ip++)
 #define READ_SHORT() \
-    (frame->ip += 2, (int16_t) (frame->ip[-2] | (frame->ip[-1] << 8)))
+    (ip += 2, (int16_t) (ip[-2] | (ip[-1] << 8)))
 #define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 #define AS_STRING(value) ((ObjString*) (value).as.obj)
 #define AS_FUNCTION(value) ((ObjFunction*) (value).as.obj)
@@ -122,7 +128,7 @@ static InterpretResult run() {
             printf(" ]");
         }
         printf("\n");
-        DisassembleInstruction(&frame->function->chunk, (int) (frame->ip - frame->function->chunk.code));
+        DisassembleInstruction(&frame->function->chunk, (int) (ip - frame->function->chunk.code));
 #endif
 
         Value right, left;
@@ -247,12 +253,12 @@ static InterpretResult run() {
             case OP_JUMP_IF_FALSE: {
                 int16_t n = READ_SHORT();
                 if (!IsTruthy(peek(0))) {
-                    frame->ip += n;
+                    ip += n;
                 }
                 break;
             }
             case OP_JUMP:
-                frame->ip += READ_SHORT();
+                ip += READ_SHORT();
                 break;
             case OP_DUPLICATE:
                 push(peek(0));
@@ -285,7 +291,6 @@ static InterpretResult run() {
                 }
                 
                 ObjFunction *function = AS_FUNCTION(called_value);
-                
                 if (argc != function->arity) {
                     runtimeError("Invalid number of arguments."); 
                     return INTERPRET_RUNTIME_ERROR;
@@ -296,10 +301,13 @@ static InterpretResult run() {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 
+                frame->ip = ip;
+                
                 frame = &vm.frames[vm.frame_count++];
                 frame->function = function;
                 frame->ip = function->chunk.code;
                 frame->slots = vm.stack_top - argc - 1;
+                ip = frame->ip;
                 
                 break;
             }
@@ -316,6 +324,7 @@ static InterpretResult run() {
                 push(v);
                 
                 frame = &vm.frames[vm.frame_count - 1];
+                ip = frame->ip;
                 break;
             }
         }
