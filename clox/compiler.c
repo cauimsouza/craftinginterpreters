@@ -5,7 +5,6 @@
 #include "common.h"
 #include "compiler.h"
 #include "memory.h"
-#include "native.h"
 #include "object.h"
 #include "scanner.h"
 #include "value.h"

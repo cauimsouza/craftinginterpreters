@@ -1,9 +1,11 @@
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include "compiler.h"
 #include "common.h"
 #include "debug.h"
-#include "native.h"
 #include "value.h"
 #include "vm.h"
 
@@ -12,6 +14,58 @@ VM vm;
 static void resetStack() {
     vm.frame_count = 0;
     vm.stack_top = vm.stack;
+}
+
+// Beginning of declaration of native functions
+
+ValueOpt Rand(int argc, Value *argv) {
+    return (ValueOpt) {
+        .value = FromDouble(rand()),
+        .error = false
+    };
+}
+
+ValueOpt Clock(int argc, Value *argv) {
+    return (ValueOpt) {
+        .value = FromDouble((double) clock() / CLOCKS_PER_SEC),
+        .error = false
+    };
+}
+
+ValueOpt Sqrt(int argc, Value *argv) {
+    Value arg = argv[0];
+    if (!IsNumber(arg) || arg.as.number < 0) {
+        return (ValueOpt) {
+            .error = true
+        };
+    }
+    
+    return (ValueOpt) {
+        .value = FromDouble(sqrt(arg.as.number)),
+        .error = false
+    };
+}
+
+ValueOpt Len(int argc, Value *argv) {
+    Value arg = argv[0];
+    if (!IsString(arg)) {
+        return (ValueOpt) {
+            .error = true
+        };
+    }
+    return (ValueOpt) {
+        .value = FromDouble(((ObjString*) arg.as.obj)->length),
+        .error = false
+    };
+}
+
+ValueOpt Print(int argc, Value *argv) {
+    PrintValue(argv[0]);
+    printf("\n");
+    return (ValueOpt) {
+        .value = FromNil(),
+        .error = false
+    };
 }
 
 static void defineNatives() {
@@ -35,6 +89,8 @@ static void defineNatives() {
     value = FromObj((Obj*) NewNative(Print, 1));
     Insert(&vm.globals, name_obj, value);
 }
+
+// End of declaration of native functions
 
 void InitVM() {
     resetStack();
