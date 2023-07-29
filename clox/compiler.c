@@ -670,7 +670,6 @@ ParseRule rules[] = {
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {nil,      NULL,   PREC_NONE},
   [TOKEN_OR]            = {NULL,     or,     PREC_OR},
-  [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
@@ -701,7 +700,6 @@ static void synchronise() {
       case TOKEN_FUN:
       case TOKEN_WHILE:
       case TOKEN_IF:
-      case TOKEN_PRINT:
       case TOKEN_RETURN:
       case TOKEN_FOR:
       case TOKEN_VAR:
@@ -758,12 +756,6 @@ static void variableDeclaration(bool is_const) {
   // TODO: Fail if a global variable is declared twice.
   Global *global = getGlobal(current, name);
   global->is_const = is_const;
-}
-
-static void printStatement() {
-  expression();
-  consume(TOKEN_SEMICOLON, "Expect ';' after expression.");
-  emitByte(OP_PRINT);
 }
 
 static void expressionStatement() {
@@ -1090,9 +1082,7 @@ static void returnStatement() {
 }
 
 static void statement() {
-  if (match(TOKEN_PRINT)) {
-    printStatement();
-  } else if (match(TOKEN_LEFT_BRACE)) {
+  if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();
     endScope();

@@ -86,8 +86,6 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return simpleInstruction("OP_MULTIPLY", offset);
         case OP_DIVIDE:
             return simpleInstruction("OP_DIVIDE", offset);
-        case OP_PRINT:
-            return simpleInstruction("OP_PRINT", offset);
         case OP_POP:
             return simpleInstruction("OP_POP", offset);
         case OP_POPN:

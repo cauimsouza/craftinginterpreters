@@ -1,5 +1,6 @@
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <time.h>
 
 #include "native.h"
@@ -43,6 +44,15 @@ ValueOpt Len(int argc, Value *argv) {
     }
     return (ValueOpt) {
         .value = FromDouble(((ObjString*) arg.as.obj)->length),
+        .error = false
+    };
+}
+
+ValueOpt Print(int argc, Value *argv) {
+    PrintValue(argv[0]);
+    printf("\n");
+    return (ValueOpt) {
+        .value = FromNil(),
         .error = false
     };
 }

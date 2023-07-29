@@ -103,8 +103,6 @@ static Token scanIdentifierOrKeyword() {
         type = TOKEN_NIL;
     } else if (!strcmp(lexeme, "or")) {
         type = TOKEN_OR;
-    } else if (!strcmp(lexeme, "print")) {
-        type = TOKEN_PRINT;
     } else if (!strcmp(lexeme, "return")) {
         type = TOKEN_RETURN;
     } else if (!strcmp(lexeme, "super")) {

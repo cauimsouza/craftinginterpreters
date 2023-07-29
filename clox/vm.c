@@ -30,6 +30,10 @@ static void defineNatives() {
     name_obj = (ObjString*) FromString("len", 3);
     value = FromObj((Obj*) NewNative(Len, 1));
     Insert(&vm.globals, name_obj, value);
+    
+    name_obj = (ObjString*) FromString("print", 5);
+    value = FromObj((Obj*) NewNative(Print, 1));
+    Insert(&vm.globals, name_obj, value);
 }
 
 void InitVM() {
@@ -203,10 +207,6 @@ static InterpretResult run() {
                 break;
             case OP_DIVIDE:
                 EXEC_NUM_BIN_OP(/, FromDouble);
-                break;
-            case OP_PRINT:
-                PrintValue(pop());
-                printf("\n");
                 break;
             case OP_POP:
                 pop();

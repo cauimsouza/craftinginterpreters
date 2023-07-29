@@ -15,4 +15,7 @@ ValueOpt Sqrt(int argc, Value *argv);
 // Implements the "len" function
 ValueOpt Len(int argc, Value *argv);
 
+// Implements the "print" function
+ValueOpt Print(int argc, Value *argv);
+
 #endif
