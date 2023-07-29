@@ -88,10 +88,6 @@ typedef struct Compiler {
   ObjFunction *function;
   FunctionType type;
   
-  Global *globals;
-  int global_count;
-  int global_capacity;
-  
   Local *locals;
   int local_count;
   int local_capacity;
@@ -108,6 +104,10 @@ typedef struct Compiler {
 
 Parser parser;
 Compiler *current = NULL;
+Global *Globals = NULL;
+int Global_count = 0;
+int Global_capacity = 0;
+  
 
 static Chunk *currentChunk() {
   return &current->function->chunk;
@@ -119,10 +119,6 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
   compiler->enclosing = current;
   compiler->function = NULL; // We nullify the field before initialising it for the GC
   compiler->type = type;
-  
-  compiler->globals = NULL;
-  compiler->global_count = 0;
-  compiler->global_capacity = 0;
   
   compiler->locals = NULL;
   compiler->local_count = 0;
@@ -146,7 +142,6 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
 }
 
 static void freeCompiler(Compiler *compiler) {
-  FREE_ARRAY(Global, compiler->globals, compiler->global_capacity);
   FREE_ARRAY(Local, compiler->locals, compiler->local_capacity);
   FREE_ARRAY(Loop, compiler->loops, compiler->loop_capacity);
   initCompiler(compiler, TYPE_SCRIPT);
@@ -236,25 +231,25 @@ static uint8_t numLocals(Compiler *compiler, int depth) {
   return n;
 }
 
-static void growGlobals(Compiler *compiler) {
-  compiler->global_capacity = GROW_CAPACITY(compiler->global_capacity);
-  compiler->globals = GROW_ARRAY(Global, compiler->globals, compiler->global_count, compiler->global_capacity);
+static void growGlobals() {
+  Global_capacity = GROW_CAPACITY(Global_capacity);
+  Globals = GROW_ARRAY(Global, Globals, Global_count, Global_capacity);
 }
 
 // getGlobal returns the global with the given name (if it already exists) or
 // creates a new global with the given name (if it doesn't exist yet).
-static Global *getGlobal(Compiler *compiler, Obj *name) {
-  for (uint8_t i = 0; i < compiler->global_count; i++) {
-    if (compiler->globals[i].name == name) {
-      return &compiler->globals[i];
+static Global *getGlobal(Obj *name) {
+  for (uint8_t i = 0; i < Global_count; i++) {
+    if (Globals[i].name == name) {
+      return &Globals[i];
     }
   }
   
-  if (compiler->global_count == compiler->global_capacity) {
-    growGlobals(compiler);
+  if (Global_count == Global_capacity) {
+    growGlobals();
   }
   
-  Global *global = &compiler->globals[compiler->global_count++];
+  Global *global = &Globals[Global_count++];
   global->name = name;
   global->is_const = false;
   global->reassigned = false;
@@ -518,7 +513,7 @@ static void identifier(bool can_assign) {
     parsePrecedence(PREC_ASSIGNMENT);
     emitByte(OP_ASSIGN_GLOBAL);
     
-    Global *global = getGlobal(current, name);
+    Global *global = getGlobal(name);
     global->reassigned = true;
     global->reassign_token = op;
     
@@ -753,7 +748,7 @@ static void variableDeclaration(bool is_const) {
   emitByte(OP_VAR_DECL);
   
   // TODO: Fail if a global variable is declared twice.
-  Global *global = getGlobal(current, name);
+  Global *global = getGlobal(name);
   global->is_const = is_const;
 }
 
@@ -1024,7 +1019,7 @@ static void functionDeclaration() {
   } else {
     // Function declared in the global scope
     is_global = true;
-    Global *global = getGlobal(current, name_obj);
+    Global *global = getGlobal(name_obj);
     global->is_const = false;
     emitConstant(FromObj(name_obj)); 
   }
@@ -1134,15 +1129,16 @@ ObjFunction *Compile(const char *source) {
     declaration();
   }
   
-  for (uint8_t i = 0; i < current->global_count; i++) {
-    if (current->globals[i].is_const && current->globals[i].reassigned) {
-      errorAt(&current->globals[i].reassign_token, "Can't reassign to const global variable.");
+  for (uint8_t i = 0; i < Global_count; i++) {
+    if (Globals[i].is_const && Globals[i].reassigned) {
+      errorAt(&Globals[i].reassign_token, "Can't reassign to const global variable.");
     }
   }
   
   ObjFunction *function = endCompiler();
   
   freeCompiler(&compiler);
+  FREE_ARRAY(Global, Globals, Global_capacity);
   
   return parser.had_error ? NULL : function;
 }
