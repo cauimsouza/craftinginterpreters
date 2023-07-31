@@ -29,9 +29,12 @@ typedef enum {
   OP_POPN, // Pops a variable number of elements from the top of the stack.
   OP_VAR_DECL,
   OP_IDENT_GLOBAL,
-  OP_IDENT_LOCAL,
   OP_ASSIGN_GLOBAL,
+  OP_IDENT_LOCAL,
   OP_ASSIGN_LOCAL,
+  OP_IDENT_UPVALUE,
+  OP_ASSIGN_UPVALUE,
+  OP_CLOSE_UPVALUE,
   
   // Jumps if top of the stack is falsey. It has one 2B operand, the offset to move ip.
   OP_JUMP_IF_FALSE, 
@@ -40,6 +43,8 @@ typedef enum {
   
   OP_DUPLICATE, // Duplicate the value at the top of the stack. Only used for "switch".
   OP_CALL,
+  OP_CLOSURE,
+  OP_CLOSURE_LONG,
 } OpCode;
 
 typedef struct {
@@ -54,7 +59,7 @@ void InitChunk(Chunk *chunk);
 void FreeChunk(Chunk *chunk);
 
 void WriteChunk(Chunk *chunk, uint8_t byte, int line);
-void WriteConstant(Chunk *chunk, Value value, int line);
+void WriteConstant(Chunk *chunk, OpCode op_simple, OpCode op_long, Value value, int line);
 
 int GetLine(Chunk *chunk, int offset);
 

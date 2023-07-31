@@ -11,6 +11,8 @@ typedef enum {
     OBJ_STRING,
     OBJ_FUNCTION,
     OBJ_NATIVE,
+    OBJ_CLOSURE,
+    OBJ_UPVALUE,
 } ObjType;
 
 struct Obj {
@@ -32,15 +34,35 @@ Obj *FromString(const char *chars, size_t length);
 Obj *Concatenate(const Obj *left_string, const Obj *right_string);
 static inline bool IsString(Value value);
 
+typedef struct ObjUpvalue {
+    Obj obj;
+    Value *location;
+    Value closed;
+    struct ObjUpvalue *next;
+} ObjUpvalue;
+
+ObjUpvalue *NewUpvalue(Value *slot);
+
 typedef struct {
     Obj obj;
     int arity;
+    int upvalue_count;
     Chunk chunk;
     ObjString *name;
 } ObjFunction;
 
 ObjFunction *NewFunction();
 static inline bool IsFunction(Value value);
+
+typedef struct {
+    Obj obj;
+    ObjFunction *function;
+    ObjUpvalue **upvalues;
+    int upvalue_count;
+} ObjClosure;
+
+ObjClosure *NewClosure(ObjFunction *function);
+static inline bool IsClosure(Value value);
 
 typedef ValueOpt (*NativeFn) (int argc, Value *argv);
 
@@ -64,6 +86,10 @@ static inline bool IsString(Value value) {
 
 static inline bool IsFunction(Value value) {
     return value.type == VAL_OBJ && value.as.obj->type == OBJ_FUNCTION;
+}
+
+static inline bool IsClosure(Value value) {
+    return value.type == VAL_OBJ && value.as.obj->type == OBJ_CLOSURE;
 }
 
 static inline bool IsNative(Value value) {

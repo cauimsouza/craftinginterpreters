@@ -78,23 +78,63 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     return (Obj*) obj;
 }
 
+ObjUpvalue *NewUpvalue(Value *slot) {
+    ObjUpvalue *upvalue = ALLOCATE(ObjUpvalue, 1);
+    upvalue->obj.next = vm.objects;
+    vm.objects = &upvalue->obj;
+    
+    upvalue->obj.type = OBJ_UPVALUE;
+    upvalue->location = slot;
+    upvalue->closed = FromNil();
+    upvalue->next = NULL;
+    
+    return upvalue;
+}
+
 ObjFunction *NewFunction() {
     ObjFunction *function = ALLOCATE(ObjFunction, 1);
-    function->obj.type = OBJ_FUNCTION;
     function->obj.next = vm.objects;
     vm.objects = &function->obj;
+    
+    function->obj.type = OBJ_FUNCTION;
     function->arity = 0;
+    function->upvalue_count = 0;
     InitChunk(&function->chunk);
     function->name = NULL;
     
     return function;
 }
 
+ObjClosure *NewClosure(ObjFunction *function) {
+    // We initialise the array of upvalues before even creating the closure
+    // to please the GC.
+    ObjUpvalue **upvalues = ALLOCATE(ObjUpvalue*, function->upvalue_count);
+    for (int i = 0; i < function->upvalue_count; i++) {
+        upvalues[i] = NULL;
+    }
+    
+    ObjClosure *closure = ALLOCATE(ObjClosure, 1);
+    closure->obj.next = vm.objects;
+    vm.objects = &function->obj;
+    
+    closure->obj.type = OBJ_CLOSURE;
+    closure->function = function;
+    closure->upvalues = upvalues;
+    closure->upvalue_count = function->upvalue_count;
+    
+    return closure;
+}
+
 ObjNative *NewNative(NativeFn function, int arity) {
     ObjNative *native = ALLOCATE(ObjNative, 1);
+    native->obj.next = vm.objects;
+    vm.objects = &native->obj;
+    
     native->obj.type = OBJ_NATIVE;
     native->arity = arity;
     native->function = function;
+    
+    return native;
 }
 
 bool ObjsEqual(const Obj *a, const Obj *b) {
@@ -114,22 +154,34 @@ bool ObjsEqual(const Obj *a, const Obj *b) {
 }
 
 void FreeObj(Obj *obj) {
-    if (obj->type == OBJ_STRING) {
-        FREE(ObjString, (ObjString*) obj);
-        return;
-    }
-    
-    if (obj->type == OBJ_FUNCTION) {
-        // We don't need to free the function name here because the GC will do that for us.
-        ObjFunction *function = (ObjFunction*) obj;
-        FreeChunk(&function->chunk);
-        FREE(ObjFunction, function);
-        return;
-    }
-    
-    if (obj->type == OBJ_NATIVE) {
-        FREE(ObjNative, (ObjNative*) obj);
-        return;
+    switch (obj->type) {
+        case OBJ_STRING:
+            FREE(ObjString, obj);
+            break;
+        case OBJ_FUNCTION: {
+            // We don't need to free the function name here because the GC will do that for us.
+            ObjFunction *function = (ObjFunction*) obj;
+            FreeChunk(&function->chunk);
+            FREE(ObjFunction, function);
+            break;
+        }
+        case OBJ_NATIVE:
+            FREE(ObjNative, obj);
+            break;
+        case OBJ_CLOSURE: {
+            // A closure doesn't own the function it encloses. In fact, there may be
+            // many closures for the same function, so we don't free the enclosed function.
+            // We don't free upvalues (multiple closures may close over the same variable),
+            // but we do free the array of upvalues.
+            ObjClosure *closure = (ObjClosure*) obj;
+            FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalue_count);
+            FREE(ObjClosure, obj);
+            break;
+        }
+        case OBJ_UPVALUE:
+            // Don't free the variable because multiple closures may close over it.
+            FREE(ObjUpvalue, obj);
+            break;
     }
 }
 
@@ -138,24 +190,33 @@ void PrintObj(const Obj *obj) {
 }
 
 void FPrintObj(FILE *stream, const Obj *obj) {
-    if (obj->type == OBJ_STRING) {
-        ObjString *objs = (ObjString*) obj;
-        fprintf(stream, "%s", objs->chars);
-        return;
-    }
-    
-    if (obj->type == OBJ_FUNCTION) {
-        ObjFunction *function = (ObjFunction*) obj;
-        if (function->name == NULL) {
-            fprintf(stream, "<script>");
-            return;
+    switch (obj->type) {
+        case OBJ_STRING: {
+            ObjString *objs = (ObjString*) obj;
+            fprintf(stream, "%s", objs->chars);
+            break;
         }
-        fprintf(stream, "<fn %s>", function->name->chars); 
-        return;
-    }
-    
-    if (obj->type == OBJ_NATIVE) {
-        fprintf(stream, "<native>");
-        return;
+        case OBJ_FUNCTION:
+        case OBJ_CLOSURE: {
+            ObjFunction *function;
+            if (obj->type == OBJ_FUNCTION) {
+                function = (ObjFunction*) obj;
+            } else {
+                function = ((ObjClosure*) obj)->function;
+            }
+            
+            if (function->name == NULL) {
+                fprintf(stream, "<script>");
+                break;
+            }
+            fprintf(stream, "<fn %s>", function->name->chars); 
+            break;
+        }
+        case OBJ_NATIVE:
+            fprintf(stream, "<native>");
+            break;
+        case OBJ_UPVALUE:
+            printf("upvalue");
+            break;
     }
 }

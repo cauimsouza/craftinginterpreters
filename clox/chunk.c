@@ -4,8 +4,8 @@
 #include "memory.h"
 
 static int addConstant(Chunk *chunk, Value value);
-static void writeConstantSimple(Chunk *chunk, int offset, int line);
-static void writeConstantLong(Chunk *chunk, int offset, int line);
+static void writeConstantSimple(Chunk *chunk, OpCode op, int offset, int line);
+static void writeConstantLong(Chunk *chunk, OpCode op, int offset, int line);
 
 void InitChunk(Chunk *chunk) {
     chunk->count = 0;
@@ -33,15 +33,15 @@ void WriteChunk(Chunk *chunk, uint8_t byte, int line) {
     chunk->count++;
 }
 
-void WriteConstant(Chunk *chunk, Value value, int line) {
+void WriteConstant(Chunk *chunk, OpCode op_simple, OpCode op_long, Value value, int line) {
     int offset = addConstant(chunk, value);
     
     if (offset > 0xFF) {
-        writeConstantLong(chunk, offset, line);
+        writeConstantLong(chunk, op_long, offset, line);
         return;
     }
     
-    writeConstantSimple(chunk, offset, line);
+    writeConstantSimple(chunk, op_simple, offset, line);
 }
 
 int GetLine(Chunk *chunk, int offset) {
@@ -53,13 +53,13 @@ static int addConstant(Chunk *chunk, Value value) {
     return chunk->constants.count - 1;
 }
 
-static void writeConstantSimple(Chunk *chunk, int offset, int line) {
-    WriteChunk(chunk, OP_CONSTANT, line);
+static void writeConstantSimple(Chunk *chunk, OpCode op, int offset, int line) {
+    WriteChunk(chunk, op, line);
     WriteChunk(chunk, offset, line);
 }
 
-static void writeConstantLong(Chunk *chunk, int offset, int line) {
-    WriteChunk(chunk, OP_CONSTANT_LONG, line);
+static void writeConstantLong(Chunk *chunk, OpCode op, int offset, int line) {
+    WriteChunk(chunk, op, line);
     
     for (int i = 0; i < 3; i++) {
         WriteChunk(chunk, offset & 0xFF, line);

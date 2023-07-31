@@ -58,11 +58,17 @@ typedef struct {
 typedef struct {
   Token name;
   bool is_const;
+  bool is_captured;
   
   // depth of the scope in which the local variable was declared or -1.
   // depth is -1 iff the variable was added to the scope but is not yet ready for use.
   int depth;
 } Local;
+
+typedef struct {
+  uint8_t index;
+  bool is_local; 
+} Upvalue;
 
 typedef enum {
   LOOP_WHILE,
@@ -87,6 +93,7 @@ typedef struct Compiler {
   struct Compiler *enclosing;
   ObjFunction *function;
   FunctionType type;
+  Upvalue upvalues[UINT8_COUNT]; // TODO: Make the array resizable.
   
   Local *locals;
   int local_count;
@@ -136,6 +143,7 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
   // The function being compiled itself is the first local.
   growLocals(current);
   Local *local = &current->locals[current->local_count++];
+  local->is_captured = false;
   local->depth = 0;
   local->name.start = "";
   local->name.length = 0;
@@ -198,6 +206,7 @@ static bool declareLocal(Compiler *compiler, Token name, bool is_const) {
   Local *local = &compiler->locals[compiler->local_count++];
   local->name = name;
   local->is_const = is_const;
+  local->is_captured = false;
   local->depth = -1;
   
   return true;
@@ -212,10 +221,6 @@ static int findLocal(Compiler *compiler, Token name) {
   }
   
   return -1;
-}
-
-static void deleteLocal(Compiler *compiler, uint8_t n) {
-  compiler->local_count -= n;
 }
 
 // numLocals returns the number of locals with at least the given depth.
@@ -383,7 +388,16 @@ static int ip() {
 }
 
 static void emitConstant(Value value) {
-  WriteConstant(currentChunk(), value, parser.previous.line);
+  WriteConstant(currentChunk(), OP_CONSTANT, OP_CONSTANT_LONG, value, parser.previous.line);
+}
+
+static void emitClosure(ObjFunction *function, Upvalue *upvalues) {
+  WriteConstant(currentChunk(), OP_CLOSURE, OP_CLOSURE_LONG, FromObj((Obj*) function), parser.previous.line);
+  
+  for (int i = 0; i < function->upvalue_count; i++) {
+    emitByte(upvalues[i].is_local ? 1 : 0);
+    emitByte(upvalues[i].index);
+  }
 }
 
 static void emitBoolean(bool boolean) {
@@ -416,11 +430,15 @@ static void beginScope() {
 }
 
 static void endScope() {
-  uint8_t n = numLocals(current, current->scope_depth);
-  emitByte(OP_POPN);
-  emitByte(n);
+  while (current->local_count > 0 && current->locals[current->local_count - 1].depth >= current->scope_depth) {
+    if (current->locals[current->local_count - 1].is_captured) {
+      emitByte(OP_CLOSE_UPVALUE);
+    } else {
+      emitByte(OP_POP);
+    }
+    current->local_count--;
+  }
   
-  deleteLocal(current, n); 
   current->scope_depth--;
 }
 
@@ -472,15 +490,55 @@ static void string(bool can_assign) {
   emitConstant(FromObj(FromString(chars, length))); 
 }
 
+static int addUpvalue(Compiler *compiler, uint8_t index, bool is_local) {
+  int count = compiler->function->upvalue_count;
+  
+  for (int i = 0; i < count; i++) {
+    Upvalue *upvalue = &compiler->upvalues[i];
+    if (upvalue->index == index && upvalue->is_local == is_local) {
+      return i;
+    }
+  } 
+  
+  if (count == UINT8_COUNT) {
+    error("Too many closure variables in function.");
+    return 0;
+  }
+  
+  compiler->upvalues[count].is_local = is_local;
+  compiler->upvalues[count].index = index;
+  return compiler->function->upvalue_count++;
+}
+
+// TODO: Take name by reference rather than by name.
+static int resolveUpvalue(Compiler *compiler, Token name) {
+  if (compiler->enclosing == NULL) {
+    return -1;
+  }
+  
+  int local = findLocal(compiler->enclosing, name);
+  if (local >= 0) {
+    compiler->enclosing->locals[local].is_captured = true;
+    return addUpvalue(compiler, (uint8_t) local, /*is_local=*/true);
+  }
+  
+  int upvalue = resolveUpvalue(compiler->enclosing, name);
+  if (upvalue >= 0) {
+    return addUpvalue(compiler, (uint8_t) upvalue, /*is_local=*/false);
+  }
+  
+  return -1;
+}
+
 // Similar to identifier, but for cases where the identifier is in a local scope.
-static void identifierLocal(Compiler *compiler, bool can_assign, int index) {
-  if (compiler->locals[index].depth < 0) {
+static void identifierLocal(Compiler *compiler, bool can_assign, int local) {
+  if (compiler->locals[local].depth < 0) {
       error("Can't read local variable being initialised.");
       return;
   }
   
   if (can_assign && match(TOKEN_EQUAL)) {
-    if (compiler->locals[index].is_const) {
+    if (compiler->locals[local].is_const) {
       error("Can't reassign to const local variable.");
       return;
     }
@@ -488,19 +546,41 @@ static void identifierLocal(Compiler *compiler, bool can_assign, int index) {
     parsePrecedence(PREC_ASSIGNMENT);
     
     emitByte(OP_ASSIGN_LOCAL);
-    emitByte(index);
+    emitByte(local);
     
     return;
   }
   
   emitByte(OP_IDENT_LOCAL);
-  emitByte(index);
+  emitByte(local);
+}
+
+// TODO: Refactor to unify identifierUpvalue and identifierLocal logic.
+static void identifierUpvalue(Compiler *compiler, bool can_assign, int upvalue) {
+  if (can_assign && match(TOKEN_EQUAL)) {
+    // TODO: Signal error if attempt to assign to const upvalue.
+    parsePrecedence(PREC_ASSIGNMENT);
+    
+    emitByte(OP_ASSIGN_UPVALUE);
+    emitByte(upvalue);
+    
+    return;
+  }
+  
+  emitByte(OP_IDENT_UPVALUE);
+  emitByte(upvalue);
 }
 
 static void identifier(bool can_assign) {
-  int index = findLocal(current, parser.previous);
-  if (index >= 0) {
-    identifierLocal(current, can_assign, index);
+  int local = findLocal(current, parser.previous);
+  if (local >= 0) {
+    identifierLocal(current, can_assign, local);
+    return;
+  }
+  
+  int upvalue = resolveUpvalue(current, parser.previous);
+  if (upvalue >= 0) {
+    identifierUpvalue(current, can_assign, upvalue);
     return;
   }
   
@@ -1053,7 +1133,7 @@ static void functionDeclaration() {
   block();
   
   ObjFunction *function = endCompiler();
-  emitConstant(FromObj((Obj*) function));
+  emitClosure(function, compiler.upvalues);
   if (is_global) {
     emitByte(OP_VAR_DECL); 
   }
