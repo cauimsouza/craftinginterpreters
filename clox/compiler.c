@@ -524,7 +524,6 @@ static int addUpvalue(Compiler *compiler, uint8_t index, bool is_local) {
   return compiler->function->upvalue_count++;
 }
 
-// TODO: Take name by reference rather than by name.
 static int resolveUpvalue(Compiler *compiler, Token name) {
   if (compiler->enclosing == NULL) {
     return -1;
@@ -919,7 +918,6 @@ static void forStatement() {
     variableDeclarationLocal(/*is_const=*/false);
     has_loop_variable = true;
   } else if (match(TOKEN_CONST)) {
-    // TODO: Forbid 'const' loop variables
     variableDeclarationLocal(/*is_const=*/true);
   } else if (match(TOKEN_SEMICOLON)) {
     // do nothing
