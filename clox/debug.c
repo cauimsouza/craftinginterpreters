@@ -4,73 +4,44 @@
 #include "object.h"
 #include "value.h"
 
+static int readNBytes(Chunk *chunk, int offset, int nbytes) {
+    int constant = 0;
+    for (int i = 0; i < nbytes; i++) {
+        constant += chunk->code[offset + 1 + i] * (1 << (8 * i));
+    }
+    
+    return constant;
+}
+
 static int simpleInstruction(const char *name, int offset) {
     printf("%s\n", name);
     return offset + 1;
 }
 
-static int constantInstruction(const char *name, Chunk *chunk, int offset) {
-    uint8_t constant = chunk->code[offset + 1];
+static int constantInstruction(const char *name, Chunk *chunk, int offset, int size_operand) {
+    int constant = readNBytes(chunk, offset, size_operand);
     printf("%-16s %8d '", name, constant);
     PrintValue(chunk->constants.values[constant]);
     printf("'\n");
     
-    return offset + 2;
+    return offset + size_operand + 1;
 }
 
-static int constantLongInstruction(const char *name, Chunk *chunk, int offset) {
-    int constant = 0;
-    for (int i = 0; i < 3; i++) {
-        constant += chunk->code[offset + 1 + i] * (1 << (8 * i));
-    }
-    
-    printf("%-16s %8d '", name, constant);
-    PrintValue(chunk->constants.values[constant]);
-    printf("'\n");
-    
-    return offset + 4;
-}
-
-static int closureInstruction(const char *name, Chunk *chunk, int offset) {
-    uint8_t constant = chunk->code[offset + 1];
+static int closureInstruction(const char *name, Chunk *chunk, int offset, int size_operand) {
+    int constant = readNBytes(chunk, offset, size_operand);
     printf("%-16s %8d '", name, constant);
     
     Value value = chunk->constants.values[constant];
     PrintValue(value);
     printf("'\n");
     
-    offset += 2;
+    offset += size_operand + 1;
     
     ObjFunction *function = (ObjFunction*) value.as.obj;
     for (int i = 0; i < function->upvalue_count; i++) {
         bool local = chunk->code[offset] == 1;
         uint8_t index = chunk->code[offset + 1];
-        printf("%04d    |                          %s %d\n", offset, local ? "local" : "upvalue", index);
-        offset += 2;
-    }
-    
-    return offset;
-}
-
-// TODO: Unify logic of closureLongInstruction and closureInstruction
-static int closureLongInstruction(const char *name, Chunk *chunk, int offset) {
-    int constant = 0;
-    for (int i = 0; i < 3; i++) {
-        constant += chunk->code[offset + 1 + i] * (1 << (8 * i));
-    }
-    printf("%-16s %8d '", name, constant);
-    
-    Value value = chunk->constants.values[constant];
-    PrintValue(value);
-    printf("'\n");
-    
-    offset += 4;
-    
-    ObjFunction *function = (ObjFunction*) value.as.obj;
-    for (int i = 0; i < function->upvalue_count; i++) {
-        bool local = chunk->code[offset] == 1;
-        uint8_t index = chunk->code[offset + 1];
-        printf("%04d    |                          %s %d\n", offset, local ? "local" : "upvalue", index);
+        printf("%04d    |                         %s %d\n", offset, local ? "local" : "upvalue", index);
         offset += 2;
     }
     
@@ -78,12 +49,13 @@ static int closureLongInstruction(const char *name, Chunk *chunk, int offset) {
 }
 
 static int byteInstruction(const char *name, Chunk *chunk, int offset) {
-    printf("%-16s %8d\n", name, chunk->code[offset + 1]);
+    int operand = readNBytes(chunk, offset, 1);
+    printf("%-16s %8d\n", name, operand);
     return offset + 2;
 }
 
 static int shortInstructions(const char *name, Chunk *chunk, int offset) {
-    int16_t operand = chunk->code[offset + 1] | chunk->code[offset + 2] << 8;
+    int operand = readNBytes(chunk, offset, 2);
     printf("%-16s %8d\n", name, operand);
     return offset + 3;
 }
@@ -100,9 +72,9 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
     uint8_t instruction = chunk->code[offset];
     switch (instruction) {
         case OP_CONSTANT:
-            return constantInstruction("OP_CONSTANT", chunk, offset);
+            return constantInstruction("OP_CONSTANT", chunk, offset, 1);
         case OP_CONSTANT_LONG:
-            return constantLongInstruction("OP_CONSTANT_LONG", chunk, offset);
+            return constantInstruction("OP_CONSTANT_LONG", chunk, offset, 3);
         case OP_NIL:
             return simpleInstruction("OP_NIL", offset);
         case OP_TRUE:
@@ -162,9 +134,9 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
         case OP_CALL:
             return byteInstruction("OP_CALL", chunk, offset);
         case OP_CLOSURE:
-            return closureInstruction("OP_CLOSURE", chunk, offset);
+            return closureInstruction("OP_CLOSURE", chunk, offset, 1);
         case OP_CLOSURE_LONG:
-            return closureLongInstruction("OP_CLOSURE_LONG", chunk, offset);
+            return closureInstruction("OP_CLOSURE_LONG", chunk, offset, 3);
         case OP_RETURN:
             return simpleInstruction("OP_RETURN", offset);
         default:
