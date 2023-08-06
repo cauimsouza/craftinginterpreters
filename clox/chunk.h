@@ -41,7 +41,7 @@ typedef enum {
   // Jumps unconditionally. It has one 2B operand, the offset to move ip. 
   OP_JUMP,
   
-  OP_DUPLICATE, // Duplicate the value at the top of the stack. Only used for "switch".
+  OP_DUPLICATE, // Duplicates the value at the top of the stack
   OP_CALL,
   OP_CLOSURE,
   OP_CLOSURE_LONG,
