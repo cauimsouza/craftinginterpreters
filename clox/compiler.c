@@ -846,7 +846,6 @@ static void variableDeclaration(bool is_const) {
   
   emitByte(OP_VAR_DECL);
   
-  // TODO: Fail if a global variable is declared twice.
   Global *global = getGlobal(name);
   global->is_const = is_const;
 }
