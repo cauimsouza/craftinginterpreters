@@ -120,7 +120,7 @@ static Chunk *currentChunk() {
   return &current->function->chunk;
 }
 
-static void growLocals(Compiler *compiler);
+static Local *newLocal(Compiler *compiler);
 
 static void initCompiler(Compiler *compiler, FunctionType type) {
   compiler->enclosing = current;
@@ -141,8 +141,7 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
   current = compiler;
   
   // The function being compiled itself is the first local.
-  growLocals(current);
-  Local *local = &current->locals[current->local_count++];
+  Local *local = newLocal(current);
   local->is_captured = false;
   local->depth = 0;
   local->name.start = "";
@@ -176,13 +175,18 @@ static ObjFunction *endCompiler() {
   return function;
 }
 
-static void growLocals(Compiler *compiler) {
-  compiler->local_capacity = GROW_CAPACITY(compiler->local_capacity);
-  compiler->locals = GROW_ARRAY(Local, compiler->locals, compiler->local_count, compiler->local_capacity);
-}
-
 static bool sameVariable(Token a, Token b) {
     return a.length == b.length && memcmp(a.start, b.start, a.length) == 0;
+}
+
+static Local *newLocal(Compiler *compiler) {
+  if (compiler->local_count < compiler->local_capacity) {
+    return &compiler->locals[compiler->local_count++];
+  }
+  
+  compiler->local_capacity = GROW_CAPACITY(compiler->local_capacity);
+  compiler->locals = GROW_ARRAY(Local, compiler->locals, compiler->local_count, compiler->local_capacity);
+  return &compiler->locals[compiler->local_count++];
 }
 
 // Returns true iff the local was successfully declared.
@@ -199,17 +203,27 @@ static bool declareLocal(Compiler *compiler, Token name, bool is_const) {
     }
   }
   
-  if (compiler->local_count == compiler->local_capacity) {
-    growLocals(compiler);
-  }
-  
-  Local *local = &compiler->locals[compiler->local_count++];
+  Local *local = newLocal(compiler);
   local->name = name;
   local->is_const = is_const;
   local->is_captured = false;
   local->depth = -1;
   
   return true;
+}
+
+// duplicateTopLocal is used to create a copy of the local variable at the top
+// of the stack. The new variable is in the current scope (which might or might
+// not be the scope of the local variable copied).
+// This function can be used to make for-loops make a copy of the loop variable
+// for each iteration.
+static void duplicateTopLocal() {
+  Local *top_local = &current->locals[current->local_count - 1];
+  Local *local = newLocal(current);
+  local->name = top_local->name;
+  local->is_const = top_local->is_const;
+  local->is_captured = false;
+  local->depth = current->scope_depth;
 }
 
 // Returns the index of the local or -1 if the local doesn't exist.
@@ -900,9 +914,12 @@ static void forStatement() {
   
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
   
+  bool has_loop_variable = false;
   if (match(TOKEN_VAR)) {
     variableDeclarationLocal(/*is_const=*/false);
+    has_loop_variable = true;
   } else if (match(TOKEN_CONST)) {
+    // TODO: Forbid 'const' loop variables
     variableDeclarationLocal(/*is_const=*/true);
   } else if (match(TOKEN_SEMICOLON)) {
     // do nothing
@@ -935,7 +952,22 @@ static void forStatement() {
   
   declareLoop(current, LOOP_FOR, end_block_target, current->scope_depth - 1);
   
-  statement();
+  // If the for-loop declares a variable in the first clause, then we create a
+  // new loop variable for each loop iteration.
+  // This makes the behaviour of the program more intuitive when the body of the
+  // loop creates closures that close over the loop variable.
+  if (has_loop_variable) {
+    beginScope();
+    duplicateTopLocal();
+    emitByte(OP_DUPLICATE);
+    
+    statement();
+    
+    endScope();
+  } else {
+    statement();
+  }
+  
   int body_end_jump = emitJump(OP_JUMP);
   patchJump(body_end_jump, end_block_target); // to the increment expression
   
