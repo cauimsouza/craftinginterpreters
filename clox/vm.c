@@ -317,7 +317,10 @@ static InterpretResult run() {
             case OP_VAR_DECL:
                 right = pop(); // value
                 left = pop(); // variable
-                Insert(&vm.globals, AS_STRING(left), right);
+                if (!Insert(&vm.globals, AS_STRING(left), right)) {
+                    runtimeError("Already a global variable with this name.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 break;
             case OP_IDENT_GLOBAL:
                 right = pop(); // variable
