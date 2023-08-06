@@ -68,6 +68,7 @@ typedef struct {
 typedef struct {
   uint8_t index;
   bool is_local; 
+  bool is_const;
 } Upvalue;
 
 typedef enum {
@@ -504,7 +505,7 @@ static void string(bool can_assign) {
   emitConstant(FromObj(FromString(chars, length))); 
 }
 
-static int addUpvalue(Compiler *compiler, uint8_t index, bool is_local) {
+static int addUpvalue(Compiler *compiler, uint8_t index, bool is_local, bool is_const) {
   int count = compiler->function->upvalue_count;
   
   for (int i = 0; i < count; i++) {
@@ -519,8 +520,11 @@ static int addUpvalue(Compiler *compiler, uint8_t index, bool is_local) {
     return 0;
   }
   
-  compiler->upvalues[count].is_local = is_local;
-  compiler->upvalues[count].index = index;
+  Upvalue *upvalue = &compiler->upvalues[count];
+  upvalue->index = index;
+  upvalue->is_local = is_local;
+  upvalue->is_const = is_const;
+  
   return compiler->function->upvalue_count++;
 }
 
@@ -532,12 +536,12 @@ static int resolveUpvalue(Compiler *compiler, Token name) {
   int local = findLocal(compiler->enclosing, name);
   if (local >= 0) {
     compiler->enclosing->locals[local].is_captured = true;
-    return addUpvalue(compiler, (uint8_t) local, /*is_local=*/true);
+    return addUpvalue(compiler, (uint8_t) local, /*is_local=*/true, compiler->enclosing->locals[local].is_const);
   }
   
   int upvalue = resolveUpvalue(compiler->enclosing, name);
   if (upvalue >= 0) {
-    return addUpvalue(compiler, (uint8_t) upvalue, /*is_local=*/false);
+    return addUpvalue(compiler, (uint8_t) upvalue, /*is_local=*/false, compiler->enclosing->upvalues[upvalue].is_const);
   }
   
   return -1;
@@ -553,7 +557,6 @@ static void identifierLocal(Compiler *compiler, bool can_assign, int local) {
   if (can_assign && match(TOKEN_EQUAL)) {
     if (compiler->locals[local].is_const) {
       error("Can't reassign to const local variable.");
-      return;
     }
     
     parsePrecedence(PREC_ASSIGNMENT);
@@ -571,7 +574,10 @@ static void identifierLocal(Compiler *compiler, bool can_assign, int local) {
 // TODO: Refactor to unify identifierUpvalue and identifierLocal logic.
 static void identifierUpvalue(Compiler *compiler, bool can_assign, int upvalue) {
   if (can_assign && match(TOKEN_EQUAL)) {
-    // TODO: Signal error if attempt to assign to const upvalue.
+    if (compiler->upvalues[upvalue].is_const) {
+      error("Can't reassign to const local variable.");
+    }
+    
     parsePrecedence(PREC_ASSIGNMENT);
     
     emitByte(OP_ASSIGN_UPVALUE);
