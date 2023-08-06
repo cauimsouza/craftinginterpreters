@@ -547,7 +547,7 @@ static int resolveUpvalue(Compiler *compiler, Token name) {
   return -1;
 }
 
-// Similar to identifier, but for cases where the identifier is in a local scope.
+// Similar to identifier, but for cases where the identifier is in the scope of the current function.
 static void identifierLocal(Compiler *compiler, bool can_assign, int local) {
   if (compiler->locals[local].depth < 0) {
       error("Can't read local variable being initialised.");
@@ -571,7 +571,7 @@ static void identifierLocal(Compiler *compiler, bool can_assign, int local) {
   emitByte(local);
 }
 
-// TODO: Refactor to unify identifierUpvalue and identifierLocal logic.
+// Similar to identifier, but for cases where the identifier is in the scope of an enclosing function.
 static void identifierUpvalue(Compiler *compiler, bool can_assign, int upvalue) {
   if (can_assign && match(TOKEN_EQUAL)) {
     if (compiler->upvalues[upvalue].is_const) {
