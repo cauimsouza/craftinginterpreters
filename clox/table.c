@@ -140,3 +140,20 @@ ObjString *Intern(Table *table, ObjString *key) {
         i = (i + 1) % table->capacity;
     }
 }
+
+void MarkTable(Table *table) {
+    for (size_t i = 0; i < table->capacity; i++) {
+        Entry *entry = &table->entries[i];
+        MarkObject((Obj*) entry->key);
+        MarkValue(entry->value);
+    }
+}
+
+void RemoveUnmarkedTableEntries(Table *string_table) {
+    for (size_t i = 0; i < string_table->capacity; i++) {
+        Entry *entry = &string_table->entries[i];
+        if (entry->key != NULL && !entry->key->obj.marked) {
+            Delete(string_table, entry->key);
+        }
+    }
+}

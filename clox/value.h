@@ -41,12 +41,12 @@ void PrintValue(Value value);
 typedef struct {
     int capacity;
     int count;
-    Value* values;
+    Value *values;
 } ValueArray;
 
-void InitValueArray(ValueArray* array);
-void WriteValueArray(ValueArray* array, Value value);
-void FreeValueArray(ValueArray* array);
+void InitValueArray(ValueArray *array);
+void WriteValueArray(ValueArray *array, Value value);
+void FreeValueArray(ValueArray *array);
 
 static inline Value FromBoolean(bool boolean) {
     return (Value) {

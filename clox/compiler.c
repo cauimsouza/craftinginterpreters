@@ -1257,3 +1257,10 @@ ObjFunction *Compile(const char *source) {
   
   return parser.had_error ? NULL : function;
 }
+
+void MarkCompilerRoots() {
+  for (Compiler *compiler = current; compiler != NULL; compiler = compiler->enclosing) {
+    MarkObject((Obj*) compiler->function);
+  }
+  
+}

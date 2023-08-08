@@ -97,7 +97,11 @@ void InitVM() {
     InitTable(&vm.strings);
     InitTable(&vm.globals);
     vm.open_upvalues = NULL;
+    
     vm.objects = NULL;
+    vm.gray_stack = NULL;
+    vm.gray_capacity = 0;
+    vm.gray_count = 0;
     
     defineNatives();
 }
@@ -112,6 +116,8 @@ void FreeVM() {
         FreeObj(obj);
         obj = next;
     }
+    
+    free(vm.gray_stack);
 }
 
 static void push(Value value) {

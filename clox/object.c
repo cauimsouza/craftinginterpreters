@@ -20,11 +20,28 @@ static uint32_t hashString(const char *chars, size_t length) {
     return hash;
 }
 
+static Obj *allocateObj(size_t size, ObjType type) {
+    Obj *obj = (Obj*) Reallocate(NULL, 0, size);
+    obj->type = type;
+    obj->marked = false;
+    obj->next = vm.objects;
+    vm.objects = obj;
+    
+#ifdef DEBUG_LOG_GC
+    printf("%p allocate %zu for %d\n", (void*) obj, size, type);
+#endif
+    
+    return obj;
+}
+
+#define ALLOCATE_OBJ(type, obj_type) (type*) allocateObj(sizeof(type), obj_type)
+
 Obj *FromString(const char *chars, size_t length) {
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
     obj->obj.next = vm.objects;
     vm.objects = &obj->obj;
+    
     obj->length = length;
     obj->hash = hashString(chars, length);
     
@@ -32,7 +49,6 @@ Obj *FromString(const char *chars, size_t length) {
        obj->chars[i] = chars[i];
     }
     obj->chars[length] = '\0';
-    
     
     ObjString *interned = Intern(&vm.strings, obj);
     if (interned != NULL) {
@@ -54,6 +70,7 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     obj->obj.type = OBJ_STRING;
     obj->obj.next = vm.objects;
     vm.objects = &obj->obj;
+    
     obj->length = length;
     
     char *c = obj->chars;
@@ -79,11 +96,7 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
 }
 
 ObjUpvalue *NewUpvalue(Value *slot) {
-    ObjUpvalue *upvalue = ALLOCATE(ObjUpvalue, 1);
-    upvalue->obj.next = vm.objects;
-    vm.objects = &upvalue->obj;
-    
-    upvalue->obj.type = OBJ_UPVALUE;
+    ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
     upvalue->location = slot;
     upvalue->closed = FromNil();
     upvalue->next = NULL;
@@ -92,11 +105,7 @@ ObjUpvalue *NewUpvalue(Value *slot) {
 }
 
 ObjFunction *NewFunction() {
-    ObjFunction *function = ALLOCATE(ObjFunction, 1);
-    function->obj.next = vm.objects;
-    vm.objects = &function->obj;
-    
-    function->obj.type = OBJ_FUNCTION;
+    ObjFunction *function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
     function->arity = 0;
     function->upvalue_count = 0;
     InitChunk(&function->chunk);
@@ -113,11 +122,7 @@ ObjClosure *NewClosure(ObjFunction *function) {
         upvalues[i] = NULL;
     }
     
-    ObjClosure *closure = ALLOCATE(ObjClosure, 1);
-    closure->obj.next = vm.objects;
-    vm.objects = &function->obj;
-    
-    closure->obj.type = OBJ_CLOSURE;
+    ObjClosure *closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
     closure->function = function;
     closure->upvalues = upvalues;
     closure->upvalue_count = function->upvalue_count;
@@ -126,11 +131,7 @@ ObjClosure *NewClosure(ObjFunction *function) {
 }
 
 ObjNative *NewNative(NativeFn function, int arity) {
-    ObjNative *native = ALLOCATE(ObjNative, 1);
-    native->obj.next = vm.objects;
-    vm.objects = &native->obj;
-    
-    native->obj.type = OBJ_NATIVE;
+    ObjNative *native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
     native->arity = arity;
     native->function = function;
     
@@ -154,6 +155,10 @@ bool ObjsEqual(const Obj *a, const Obj *b) {
 }
 
 void FreeObj(Obj *obj) {
+#ifdef DEBUG_LOG_GC
+    printf("%p free type %d\n", (void*) obj, obj->type);
+#endif
+
     switch (obj->type) {
         case OBJ_STRING:
             FREE(ObjString, obj);
