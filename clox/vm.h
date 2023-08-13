@@ -24,6 +24,8 @@ typedef struct {
   Table globals;
   ObjUpvalue *open_upvalues;
   
+  size_t bytes_allocated;
+  size_t next_gc;
   Obj *objects;
   Obj **gray_stack;
   int gray_capacity;
@@ -40,6 +42,9 @@ extern VM vm;
 
 void InitVM();
 void FreeVM();
+void Push(Value value);
+Value Pop();
+
 InterpretResult Interpret(const char *source);
 
 #endif

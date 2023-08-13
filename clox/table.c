@@ -34,8 +34,14 @@ static Entry *probe(Table *table, ObjString *key) {
 
 static void grow(Table *table) {
     if (table->capacity == 0) {
-        table->capacity = GROW_CAPACITY(table->capacity);
-        table->entries = ALLOCATE(Entry, table->capacity);
+        // GROW_ARRAY() might trigger a garbage collection, which will try (if
+        // this is the 'strings' table) try to free unmarked objects in this
+        // table. The garbage collector reads the 'capacity' field to traverse
+        // the entries in this table. Therefore, we should only update the
+        // 'capacity' field *after* the call to GROW_ARRAY().
+        size_t new_cap = GROW_CAPACITY(0);
+        table->entries = GROW_ARRAY(Entry, table->entries, 0, new_cap);
+        table->capacity = new_cap;
         for (size_t i = 0; i < table->capacity; i++) {
             table->entries[i].key = NULL;     
             table->entries[i].value = FromNil();
@@ -43,19 +49,21 @@ static void grow(Table *table) {
         return;
     }
     
-    size_t capacity = table->capacity;
-    Entry *old_entries = table->entries;
+    size_t cur_cap = table->capacity;
+    size_t new_cap = GROW_CAPACITY(cur_cap);
     
-    table->count = 0; // We recalculate count as part of the move below
-    table->capacity = GROW_CAPACITY(table->capacity);
-    table->entries = ALLOCATE(Entry, table->capacity);
-    for (size_t i = 0; i < table->capacity; i++) {
+    Entry *cur_entries = table->entries;
+    table->entries = ALLOCATE(Entry, new_cap);
+    for (size_t i = 0; i < new_cap; i++) {
         table->entries[i].key = NULL;     
         table->entries[i].value = FromNil();
     }
     
-    for (size_t i = 0; i < capacity; i++) {
-        Entry *entry = &old_entries[i];
+    table->capacity = new_cap;
+    
+    table->count = 0; // We recalculate count as part of the moves below
+    for (size_t i = 0; i < cur_cap; i++) {
+        Entry *entry = &cur_entries[i];
         if (entry->key == NULL) {
             continue;
         }
@@ -63,7 +71,7 @@ static void grow(Table *table) {
         Insert(table, entry->key, entry->value);
     }
     
-    FREE_ARRAY(Entry, old_entries, capacity);
+    FREE_ARRAY(Entry, cur_entries, cur_cap);
 }
 
 void InitTable(Table *table) {

@@ -13,6 +13,9 @@
 #include "debug.h"
 #endif
 
+void Push(Value value);
+Value Pop();
+
 typedef struct {
   Token previous;
   Token current;
@@ -152,7 +155,6 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
 static void freeCompiler(Compiler *compiler) {
   FREE_ARRAY(Local, compiler->locals, compiler->local_capacity);
   FREE_ARRAY(Loop, compiler->loops, compiler->loop_capacity);
-  initCompiler(compiler, TYPE_SCRIPT);
 }
 
 static void nil(bool can_assign);
@@ -390,6 +392,10 @@ static bool match(TokenType type) {
   return false;
 }
 
+static int ip() {
+  return currentChunk()->count;
+}
+
 static void emitByte(uint8_t byte) {
   WriteChunk(currentChunk(), byte, parser.previous.line);
 }
@@ -398,16 +404,17 @@ static void emitByteAt(uint8_t byte, uint8_t address) {
   currentChunk()->code[address] = byte;
 }
 
-static int ip() {
-  return currentChunk()->count;
-}
-
 static void emitConstant(Value value) {
+  Push(value);
   WriteConstant(currentChunk(), OP_CONSTANT, OP_CONSTANT_LONG, value, parser.previous.line);
+  Pop();
 }
 
 static void emitClosure(ObjFunction *function, Upvalue *upvalues) {
-  WriteConstant(currentChunk(), OP_CLOSURE, OP_CLOSURE_LONG, FromObj((Obj*) function), parser.previous.line);
+  Value fun_val = FromObj((Obj*) function);
+  Push(fun_val);
+  WriteConstant(currentChunk(), OP_CLOSURE, OP_CLOSURE_LONG, fun_val, parser.previous.line);
+  Pop();
   
   for (int i = 0; i < function->upvalue_count; i++) {
     emitByte(upvalues[i].is_local ? 1 : 0);
@@ -1122,6 +1129,7 @@ static void functionDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
   Token name = parser.previous; 
   Obj *name_obj = FromString(name.start, name.length);
+  Push(FromObj(name_obj));
   
   // Declare the function before defining it because the function might be recursive.
   bool is_global = false;
@@ -1172,6 +1180,8 @@ static void functionDeclaration() {
   if (is_global) {
     emitByte(OP_VAR_DECL); 
   }
+  
+  Pop(); // name_obj
 }
 
 static void returnStatement() {
@@ -1249,11 +1259,15 @@ ObjFunction *Compile(const char *source) {
       errorAt(&Globals[i].reassign_token, "Can't reassign to const global variable.");
     }
   }
+  FREE_ARRAY(Global, Globals, Global_capacity);
   
   ObjFunction *function = endCompiler();
+  Push(FromObj((Obj*) function)); // To prevent the GC from freeing it
   
   freeCompiler(&compiler);
-  FREE_ARRAY(Global, Globals, Global_capacity);
+  current = NULL;
+  
+  Pop();
   
   return parser.had_error ? NULL : function;
 }

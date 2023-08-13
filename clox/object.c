@@ -39,9 +39,14 @@ static Obj *allocateObj(size_t size, ObjType type) {
 Obj *FromString(const char *chars, size_t length) {
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
+    obj->obj.marked = false;
     obj->obj.next = vm.objects;
     vm.objects = &obj->obj;
     
+#ifdef DEBUG_LOG_GC
+    printf("%p allocate %zu for %d\n", (void*) obj, length + 1, OBJ_STRING);
+#endif
+
     obj->length = length;
     obj->hash = hashString(chars, length);
     
@@ -56,7 +61,9 @@ Obj *FromString(const char *chars, size_t length) {
         FreeObj((Obj*) obj);
         return (Obj*) interned;
     }
+    Push(FromObj((Obj*) obj)); // Push it onto the queue so that the GC doesn't free it
     Insert(&vm.strings, obj, FromNil());
+    Pop();
     
     return (Obj*) obj;
 }
@@ -68,8 +75,13 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     size_t length = left->length + right ->length;
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
+    obj->obj.marked = false;
     obj->obj.next = vm.objects;
     vm.objects = &obj->obj;
+    
+#ifdef DEBUG_LOG_GC
+    printf("%p allocate %zu for %d\n", (void*) obj, length + 1, OBJ_STRING);
+#endif
     
     obj->length = length;
     
@@ -90,7 +102,9 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
         FreeObj((Obj*) obj);
         return (Obj*) interned;
     }
+    Push(FromObj((Obj*) obj)); // Push it onto the queue so that the GC doesn't free it
     Insert(&vm.strings, obj, FromNil());
+    Pop();
     
     return (Obj*) obj;
 }
@@ -187,6 +201,9 @@ void FreeObj(Obj *obj) {
             // Don't free the variable because multiple closures may close over it.
             FREE(ObjUpvalue, obj);
             break;
+        default:
+            printf("Freeing object at %p of invalid object type\n", (void*) obj);
+            exit(1);
     }
 }
 

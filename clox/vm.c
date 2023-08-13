@@ -11,6 +11,16 @@
 
 VM vm; 
 
+void Push(Value value) {
+    *vm.stack_top = value;
+    vm.stack_top++;
+}
+
+Value Pop() {
+    vm.stack_top--;
+    return *vm.stack_top;
+}
+
 static void resetStack() {
     vm.frame_count = 0;
     vm.stack_top = vm.stack;
@@ -69,25 +79,45 @@ ValueOpt Print(int argc, Value *argv) {
 }
 
 static void defineNatives() {
-    ObjString *name_obj = (ObjString*) FromString("rand", 4);
     Value value = FromObj((Obj*) NewNative(Rand, 0));
+    Push(value);
+    ObjString *name_obj = (ObjString*) FromString("rand", 4);
+    Push(FromObj((Obj*) name_obj));
     Insert(&vm.globals, name_obj, value);
+    Pop();
+    Pop();
     
-    name_obj = (ObjString*) FromString("clock", 5);
     value = FromObj((Obj*) NewNative(Clock, 0));
+    Push(value);
+    name_obj = (ObjString*) FromString("clock", 5);
+    Push(FromObj((Obj*) name_obj));
     Insert(&vm.globals, name_obj, value);
+    Pop();
+    Pop();
     
-    name_obj = (ObjString*) FromString("sqrt", 4);
     value = FromObj((Obj*) NewNative(Sqrt, 1));
+    Push(value);
+    name_obj = (ObjString*) FromString("sqrt", 4);
+    Push(FromObj((Obj*) name_obj));
     Insert(&vm.globals, name_obj, value);
+    Pop();
+    Pop();
     
-    name_obj = (ObjString*) FromString("len", 3);
     value = FromObj((Obj*) NewNative(Len, 1));
+    Push(value);
+    name_obj = (ObjString*) FromString("len", 3);
+    Push(FromObj((Obj*) name_obj));
     Insert(&vm.globals, name_obj, value);
+    Pop();
+    Pop();
     
-    name_obj = (ObjString*) FromString("print", 5);
     value = FromObj((Obj*) NewNative(Print, 1));
+    Push(value);
+    name_obj = (ObjString*) FromString("print", 5);
+    Push(FromObj((Obj*) name_obj));
     Insert(&vm.globals, name_obj, value);
+    Pop();
+    Pop();
 }
 
 // End of declaration of native functions
@@ -98,6 +128,8 @@ void InitVM() {
     InitTable(&vm.globals);
     vm.open_upvalues = NULL;
     
+    vm.bytes_allocated = 0;
+    vm.next_gc = 1024 * 1024;
     vm.objects = NULL;
     vm.gray_stack = NULL;
     vm.gray_capacity = 0;
@@ -118,16 +150,6 @@ void FreeVM() {
     }
     
     free(vm.gray_stack);
-}
-
-static void push(Value value) {
-    *vm.stack_top = value;
-    vm.stack_top++;
-}
-
-static Value pop() {
-    vm.stack_top--;
-    return *vm.stack_top;
 }
 
 static Value peek(int index) {
@@ -151,10 +173,12 @@ static void runtimeError(const char *message) {
 }
 
 static void concatenate() {
-    Obj *right_string = pop().as.obj;
-    Obj *left_string = pop().as.obj;
+    Obj *right_string = peek(0).as.obj;
+    Obj *left_string = peek(1).as.obj;
     Obj *sum = Concatenate(left_string, right_string);
-    push(FromObj(sum));
+    Pop();
+    Pop();
+    Push(FromObj(sum));
 }
 
 static ObjUpvalue *captureUpvalue(Value *slot) {
@@ -212,16 +236,17 @@ static InterpretResult run() {
 #define AS_NATIVE(value) ((ObjNative*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
-        Value right = pop(); \
-        Value left = pop(); \
+        Value right = Pop(); \
+        Value left = Pop(); \
         if (!IsNumber(right) || !IsNumber(left)) { \
             runtimeError("Operands must be numbers."); \
             return INTERPRET_RUNTIME_ERROR; \
         } \
         Value result = toValue(left.as.number op right.as.number); \
-        push(result); \
+        Push(result); \
     } while (false)
 
+    int itn = 0;
     for (;;) {
         
 #ifdef DEBUG
@@ -240,7 +265,7 @@ static InterpretResult run() {
         switch (instruction) {
             case OP_CONSTANT: {
                 size_t offset = READ_BYTE();
-                push(READ_CONSTANT(offset));
+                Push(READ_CONSTANT(offset));
                 break;
             }
             case OP_CONSTANT_LONG: {
@@ -248,35 +273,35 @@ static InterpretResult run() {
                 for (size_t i = 0, pot = 1; i < 3; i++, pot = (pot << 8)) {
                     offset += READ_BYTE() * pot;
                 }
-                push(READ_CONSTANT(offset));
+                Push(READ_CONSTANT(offset));
                 break;
             }
             case OP_NIL:
-                push(FromNil());
+                Push(FromNil());
                 break;
             case OP_TRUE:
-                push(FromBoolean(true));
+                Push(FromBoolean(true));
                 break;
             case OP_FALSE:
-                push(FromBoolean(false));
+                Push(FromBoolean(false));
                 break;
             case OP_NEGATE:
-                left = pop();
+                left = Pop();
                 if (!IsNumber(left)) {
                     runtimeError("Operand must be a number.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                push(FromDouble(-left.as.number));
+                Push(FromDouble(-left.as.number));
                 break;
             case OP_NOT:
-                left = pop();
-                push(FromBoolean(!IsTruthy(left)));
+                left = Pop();
+                Push(FromBoolean(!IsTruthy(left)));
                 break;
             case OP_EQ:
-                push(FromBoolean(ValuesEqual(pop(), pop())));
+                Push(FromBoolean(ValuesEqual(Pop(), Pop())));
                 break;
             case OP_NEQ:
-                push(FromBoolean(!ValuesEqual(pop(), pop())));
+                Push(FromBoolean(!ValuesEqual(Pop(), Pop())));
                 break;
             case OP_LESS:
                 EXEC_NUM_BIN_OP(<, FromBoolean);
@@ -296,7 +321,7 @@ static InterpretResult run() {
                     break;
                 }
                 if (IsNumber(peek(0)) && IsNumber(peek(1))) {
-                   push(FromDouble(pop().as.number + pop().as.number));
+                   Push(FromDouble(Pop().as.number + Pop().as.number));
                    break;
                 }
                 runtimeError("Operands must be two strings or two numbers.");
@@ -311,43 +336,49 @@ static InterpretResult run() {
                 EXEC_NUM_BIN_OP(/, FromDouble);
                 break;
             case OP_POP:
-                pop();
+                Pop();
                 break;
             case OP_POPN: {
                 uint8_t n = READ_BYTE();
                 for (uint8_t i = 0; i < n; i++) {
-                    pop();
+                    Pop();
                 }
                 break;
             }
             case OP_VAR_DECL:
-                right = pop(); // value
-                left = pop(); // variable
+                // The call to Insert() might trigger a GC cycle. If 'right' and 'left' are not on the stack, the GC might collect them.
+                right = peek(0); // value
+                left = peek(1); // variable
                 if (!Insert(&vm.globals, AS_STRING(left), right)) {
                     runtimeError("Already a global variable with this name.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
+                Pop();
+                Pop();
                 break;
             case OP_IDENT_GLOBAL:
-                right = pop(); // variable
+                right = Pop(); // variable
                 if (Get(&vm.globals, AS_STRING(right), &left)) {
-                    push(left);
+                    Push(left);
                     break;
                 }
                 runtimeError("Undefined identifier.");
                 return INTERPRET_RUNTIME_ERROR;
             case OP_ASSIGN_GLOBAL:
-                right = pop(); // value
-                left = pop(); // variable
+                // The call to Insert() might trigger a GC cycle. If 'right' and 'left' are not on the stack, the GC might collect them.
+                right = peek(0); // value
+                left = peek(0); // variable
                 if (Insert(&vm.globals, AS_STRING(left), right)) {
                    runtimeError("Undefined variable.");
                    return INTERPRET_RUNTIME_ERROR;
                 }
-                push(right);
+                Pop();
+                Pop();
+                Push(right);
                 break;
             case OP_IDENT_LOCAL: {
                 uint8_t i = READ_BYTE();
-                push(frame->slots[i]);
+                Push(frame->slots[i]);
                 break;
             }
             case OP_ASSIGN_LOCAL: {
@@ -357,7 +388,7 @@ static InterpretResult run() {
             }
             case OP_IDENT_UPVALUE: {
                 uint8_t index = READ_BYTE();
-                push(*frame->closure->upvalues[index]->location);
+                Push(*frame->closure->upvalues[index]->location);
                 break;
             }
             case OP_ASSIGN_UPVALUE: {
@@ -367,7 +398,7 @@ static InterpretResult run() {
             }
             case OP_CLOSE_UPVALUE:
                 closeUpvalues(vm.stack_top - 1);
-                pop();
+                Pop();
                 break;
             case OP_JUMP_IF_FALSE: {
                 int16_t n = READ_SHORT();
@@ -380,7 +411,7 @@ static InterpretResult run() {
                 ip += READ_SHORT();
                 break;
             case OP_DUPLICATE:
-                push(peek(0));
+                Push(peek(0));
                 break;
             case OP_CALL: {
                 uint8_t argc = READ_BYTE();
@@ -405,7 +436,7 @@ static InterpretResult run() {
                         return INTERPRET_RUNTIME_ERROR;
                     }
                     vm.stack_top -= argc + 1;
-                    push(result.value);
+                    Push(result.value);
                     break;
                 }
                 
@@ -434,7 +465,7 @@ static InterpretResult run() {
                 size_t offset = READ_BYTE();
                 ObjFunction *function = AS_FUNCTION(READ_CONSTANT(offset));
                 ObjClosure *closure = NewClosure(function);
-                push(FromObj((Obj*) closure));
+                Push(FromObj((Obj*) closure));
                 for (int i = 0; i < closure->upvalue_count; i++) {
                     uint8_t is_local = READ_BYTE();
                     uint8_t index = READ_BYTE();
@@ -453,21 +484,21 @@ static InterpretResult run() {
                 }
                 ObjFunction *function = AS_FUNCTION(READ_CONSTANT(offset));
                 ObjClosure *closure = NewClosure(function);
-                push(FromObj((Obj*) closure));
+                Push(FromObj((Obj*) closure));
                 break;
             }
             case OP_RETURN: {
-                Value v = pop();
+                Value v = Pop();
                 closeUpvalues(frame->slots);
                 
                 vm.frame_count--;
                 if (vm.frame_count == 0) {
-                    pop();
+                    Pop();
                     return INTERPRET_OK;
                 }
                 
                 vm.stack_top = frame->slots;
-                push(v);
+                Push(v);
                 
                 frame = &vm.frames[vm.frame_count - 1];
                 ip = frame->ip;
@@ -491,11 +522,12 @@ InterpretResult Interpret(const char *source) {
         FreeObj((Obj*) script);
         return INTERPRET_COMPILE_ERROR;
     }
+    
     // Put 'script' onto the stack just to make the GC aware of it.
-    push(FromObj((Obj*) script));
+    Push(FromObj((Obj*) script));
     ObjClosure *closure = NewClosure(script);
-    pop();
-    push(FromObj((Obj*) closure));
+    Pop();
+    Push(FromObj((Obj*) closure));
     
     CallFrame *frame = &vm.frames[vm.frame_count++];
     frame->closure = closure;
@@ -504,7 +536,6 @@ InterpretResult Interpret(const char *source) {
     
     InterpretResult result = run();
     
-    // TODO: For some we don't need to free the object. Figure out why and delete line below.
     FreeObj((Obj*) script);
     
     return result;
