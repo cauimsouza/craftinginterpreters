@@ -28,8 +28,9 @@
 void* Reallocate(void *pointer, size_t old_size, size_t new_size);
 
 // GC related functions
-void CollectGarbage();
-void MarkObject(Obj *obj);
-void MarkValue(Value value);
+void IncrementRefcountValue(Value value);
+void IncrementRefcountObject(Obj *obj);
+void DecrementRefcountValue(Value value);
+void DecrementRefcountObject(Obj *obj);
 
 #endif

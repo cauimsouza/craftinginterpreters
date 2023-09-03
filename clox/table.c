@@ -69,6 +69,10 @@ static void grow(Table *table) {
         }
         
         Insert(table, entry->key, entry->value);
+        
+        // Insert increments the refcounts of the key and of the value, so we have to decrement them
+        DecrementRefcountObject((Obj*) entry->key);
+        DecrementRefcountValue(entry->value);
     }
     
     FREE_ARRAY(Entry, cur_entries, cur_cap);
@@ -81,6 +85,16 @@ void InitTable(Table *table) {
 }
 
 void FreeTable(Table *table) {
+    for (size_t i = 0; i < table->capacity; i++) {
+        Entry *entry = &table->entries[i];
+        if (entry->key == NULL) {
+            continue;
+        }
+        
+        DecrementRefcountObject((Obj*) entry->key);
+        DecrementRefcountValue(entry->value);
+    }
+    
     FREE_ARRAY(Entry, table->entries, table->capacity);    
     InitTable(table);
 }
@@ -99,6 +113,12 @@ bool Insert(Table *table, ObjString *key, Value value) {
     }
     entry->key = key;
     entry->value = value;
+    
+    if (res) {
+        IncrementRefcountObject((Obj*) key);
+    }
+    IncrementRefcountValue(value);
+    
     return res;
 }
 
@@ -124,6 +144,9 @@ void Delete(Table *table, ObjString *key) {
     if (entry->key == NULL) {
         return;
     }
+    
+    DecrementRefcountObject((Obj*) entry->key);
+    
     entry->key = NULL;
     entry->value = FromBoolean(true);
 }
@@ -146,22 +169,5 @@ ObjString *Intern(Table *table, ObjString *key) {
             return entry->key; 
         }
         i = (i + 1) % table->capacity;
-    }
-}
-
-void MarkTable(Table *table) {
-    for (size_t i = 0; i < table->capacity; i++) {
-        Entry *entry = &table->entries[i];
-        MarkObject((Obj*) entry->key);
-        MarkValue(entry->value);
-    }
-}
-
-void RemoveUnmarkedTableEntries(Table *string_table) {
-    for (size_t i = 0; i < string_table->capacity; i++) {
-        Entry *entry = &string_table->entries[i];
-        if (entry->key != NULL && !entry->key->obj.marked) {
-            Delete(string_table, entry->key);
-        }
     }
 }

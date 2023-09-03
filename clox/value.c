@@ -44,6 +44,10 @@ void WriteValueArray(ValueArray* array, Value value) {
 }
 
 void FreeValueArray(ValueArray* array) {
+    for (int i = 0; i < array->count; i++) {
+        DecrementRefcountValue(array->values[i]);
+    }
+    
     FREE_ARRAY(Value, array->values, array->capacity);
     InitValueArray(array);
 }

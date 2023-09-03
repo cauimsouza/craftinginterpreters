@@ -23,8 +23,12 @@ static uint32_t hashString(const char *chars, size_t length) {
 static Obj *allocateObj(size_t size, ObjType type) {
     Obj *obj = (Obj*) Reallocate(NULL, 0, size);
     obj->type = type;
-    obj->marked = false;
+    obj->refcount = 0;
+    obj->prev = NULL;
     obj->next = vm.objects;
+    if (vm.objects != NULL) {
+        vm.objects->prev = obj;
+    }
     vm.objects = obj;
     
 #ifdef DEBUG_LOG_GC
@@ -39,8 +43,12 @@ static Obj *allocateObj(size_t size, ObjType type) {
 Obj *FromString(const char *chars, size_t length) {
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
-    obj->obj.marked = false;
+    obj->obj.refcount = 0;
+    obj->obj.prev = NULL;
     obj->obj.next = vm.objects;
+    if (vm.objects != NULL) {
+        vm.objects->prev = (Obj*) obj;
+    }
     vm.objects = &obj->obj;
     
 #ifdef DEBUG_LOG_GC
@@ -57,7 +65,6 @@ Obj *FromString(const char *chars, size_t length) {
     
     ObjString *interned = Intern(&vm.strings, obj);
     if (interned != NULL) {
-        vm.objects = obj->obj.next;
         FreeObj((Obj*) obj);
         return (Obj*) interned;
     }
@@ -75,8 +82,12 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     size_t length = left->length + right ->length;
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
-    obj->obj.marked = false;
+    obj->obj.refcount = 0;
+    obj->obj.prev = NULL;
     obj->obj.next = vm.objects;
+    if (vm.objects != NULL) {
+        vm.objects->prev = (Obj*) obj;
+    }
     vm.objects = &obj->obj;
     
 #ifdef DEBUG_LOG_GC
@@ -98,7 +109,6 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     
     ObjString *interned = Intern(&vm.strings, obj);
     if (interned != NULL) {
-        vm.objects = obj->obj.next;
         FreeObj((Obj*) obj);
         return (Obj*) interned;
     }
@@ -111,7 +121,7 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
 
 ObjUpvalue *NewUpvalue(Value *slot) {
     ObjUpvalue *upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
-    upvalue->location = slot;
+    upvalue->location = slot; IncrementRefcountValue(*slot);
     upvalue->closed = FromNil();
     upvalue->next = NULL;
     
@@ -137,7 +147,7 @@ ObjClosure *NewClosure(ObjFunction *function) {
     }
     
     ObjClosure *closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
-    closure->function = function;
+    closure->function = function; IncrementRefcountObject((Obj*) function);
     closure->upvalues = upvalues;
     closure->upvalue_count = function->upvalue_count;
     
@@ -169,9 +179,23 @@ bool ObjsEqual(const Obj *a, const Obj *b) {
 }
 
 void FreeObj(Obj *obj) {
-#ifdef DEBUG_LOG_GC
-    printf("%p free type %d\n", (void*) obj, obj->type);
-#endif
+    #ifdef DEBUG_LOG_GC
+        printf("freeing ");
+        PrintObj(obj);
+        printf(" at address %p\n", (void*) obj);
+    #endif
+
+    Obj *prev = obj->prev;
+    Obj *next = obj->next;
+    if (prev != NULL) {
+        prev->next = next;
+    }
+    if (next != NULL) {
+        next->prev = prev;
+    }
+    if (vm.objects == obj) {
+        vm.objects = next;
+    }
 
     switch (obj->type) {
         case OBJ_STRING:
@@ -180,6 +204,10 @@ void FreeObj(Obj *obj) {
         case OBJ_FUNCTION: {
             // We don't need to free the function name here because the GC will do that for us.
             ObjFunction *function = (ObjFunction*) obj;
+            if (function->name != NULL) {
+                // function->name == NULL when function = <script>
+                DecrementRefcountObject((Obj*) function->name);
+            }
             FreeChunk(&function->chunk);
             FREE(ObjFunction, function);
             break;
@@ -193,14 +221,25 @@ void FreeObj(Obj *obj) {
             // We don't free upvalues (multiple closures may close over the same variable),
             // but we do free the array of upvalues.
             ObjClosure *closure = (ObjClosure*) obj;
+            
+            DecrementRefcountObject((Obj*) closure->function);
+            for (int i = 0; i < closure->upvalue_count; i++) {
+                DecrementRefcountObject((Obj*) closure->upvalues[i]);
+            }
+            
             FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalue_count);
             FREE(ObjClosure, obj);
             break;
         }
-        case OBJ_UPVALUE:
+        case OBJ_UPVALUE: {
             // Don't free the variable because multiple closures may close over it.
+            ObjUpvalue *upvalue = (ObjUpvalue*) obj;
+            
+            DecrementRefcountValue(*upvalue->location);
+            
             FREE(ObjUpvalue, obj);
             break;
+        }
         default:
             printf("Freeing object at %p of invalid object type\n", (void*) obj);
             exit(1);
@@ -223,15 +262,17 @@ void FPrintObj(FILE *stream, const Obj *obj) {
             ObjFunction *function;
             if (obj->type == OBJ_FUNCTION) {
                 function = (ObjFunction*) obj;
+                fprintf(stream, "<fn ");
             } else {
                 function = ((ObjClosure*) obj)->function;
+                fprintf(stream, "<closure ");
             }
             
             if (function->name == NULL) {
-                fprintf(stream, "<script>");
+                fprintf(stream, " script>");
                 break;
             }
-            fprintf(stream, "<fn %s>", function->name->chars); 
+            fprintf(stream, "%s>", function->name->chars); 
             break;
         }
         case OBJ_NATIVE:

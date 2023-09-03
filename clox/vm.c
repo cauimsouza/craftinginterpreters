@@ -6,6 +6,7 @@
 #include "compiler.h"
 #include "common.h"
 #include "debug.h"
+#include "memory.h"
 #include "value.h"
 #include "vm.h"
 
@@ -14,16 +15,14 @@ VM vm;
 void Push(Value value) {
     *vm.stack_top = value;
     vm.stack_top++;
+    IncrementRefcountValue(value);
 }
 
 Value Pop() {
     vm.stack_top--;
-    return *vm.stack_top;
-}
-
-static void resetStack() {
-    vm.frame_count = 0;
-    vm.stack_top = vm.stack;
+    Value value = *vm.stack_top;
+    DecrementRefcountValue(value);
+    return value;
 }
 
 // Beginning of declaration of native functions
@@ -79,77 +78,61 @@ ValueOpt Print(int argc, Value *argv) {
 }
 
 static void defineNatives() {
-    Value value = FromObj((Obj*) NewNative(Rand, 0));
-    Push(value);
     ObjString *name_obj = (ObjString*) FromString("rand", 4);
-    Push(FromObj((Obj*) name_obj));
+    Value value = FromObj((Obj*) NewNative(Rand, 0));
     Insert(&vm.globals, name_obj, value);
-    Pop();
-    Pop();
     
-    value = FromObj((Obj*) NewNative(Clock, 0));
-    Push(value);
     name_obj = (ObjString*) FromString("clock", 5);
-    Push(FromObj((Obj*) name_obj));
+    value = FromObj((Obj*) NewNative(Clock, 0));
     Insert(&vm.globals, name_obj, value);
-    Pop();
-    Pop();
     
-    value = FromObj((Obj*) NewNative(Sqrt, 1));
-    Push(value);
     name_obj = (ObjString*) FromString("sqrt", 4);
-    Push(FromObj((Obj*) name_obj));
+    value = FromObj((Obj*) NewNative(Sqrt, 1));
     Insert(&vm.globals, name_obj, value);
-    Pop();
-    Pop();
     
-    value = FromObj((Obj*) NewNative(Len, 1));
-    Push(value);
     name_obj = (ObjString*) FromString("len", 3);
-    Push(FromObj((Obj*) name_obj));
+    value = FromObj((Obj*) NewNative(Len, 1));
     Insert(&vm.globals, name_obj, value);
-    Pop();
-    Pop();
     
-    value = FromObj((Obj*) NewNative(Print, 1));
-    Push(value);
     name_obj = (ObjString*) FromString("print", 5);
-    Push(FromObj((Obj*) name_obj));
+    value = FromObj((Obj*) NewNative(Print, 1));
     Insert(&vm.globals, name_obj, value);
-    Pop();
-    Pop();
 }
 
 // End of declaration of native functions
 
 void InitVM() {
-    resetStack();
+    vm.frame_count = 0;
+    
+    vm.stack_top = vm.stack;
+    
     InitTable(&vm.strings);
     InitTable(&vm.globals);
+    
     vm.open_upvalues = NULL;
     
-    vm.bytes_allocated = 0;
-    vm.next_gc = 1024 * 1024;
     vm.objects = NULL;
-    vm.gray_stack = NULL;
-    vm.gray_capacity = 0;
-    vm.gray_count = 0;
     
     defineNatives();
 }
 
 void FreeVM() {
-    FreeTable(&vm.strings);
+    #ifdef DEBUG_LOG_GC
+        printf("Freeing globals table.\n");
+    #endif
     FreeTable(&vm.globals);
     
-    Obj *obj = vm.objects;
-    while (obj != NULL) {
-        Obj *next = obj->next;
-        FreeObj(obj);
-        obj = next;
-    }
+    #ifdef DEBUG_LOG_GC
+        printf("Freeing string table.\n");
+    #endif
+    FreeTable(&vm.strings);
     
-    free(vm.gray_stack);
+    #ifdef DEBUG_LOG_GC
+        printf("Freeing remaining objects.\n");
+    #endif
+    while (vm.objects != NULL) {
+        FreeObj(vm.objects);
+    }
 }
 
 static Value peek(int index) {
@@ -169,15 +152,16 @@ static void runtimeError(const char *message) {
         fprintf(stderr, "\n");
     }
     
-    resetStack();
+    while (vm.stack_top != vm.stack) {
+        Pop();
+    }
+    vm.frame_count = 0;
 }
 
 static void concatenate() {
-    Obj *right_string = peek(0).as.obj;
-    Obj *left_string = peek(1).as.obj;
+    Obj *right_string = Pop().as.obj;
+    Obj *left_string = Pop().as.obj;
     Obj *sum = Concatenate(left_string, right_string);
-    Pop();
-    Pop();
     Push(FromObj(sum));
 }
 
@@ -285,24 +269,36 @@ static InterpretResult run() {
             case OP_FALSE:
                 Push(FromBoolean(false));
                 break;
-            case OP_NEGATE:
-                left = Pop();
-                if (!IsNumber(left)) {
+            case OP_NEGATE: {
+                if (!IsNumber(peek(0))) {
                     runtimeError("Operand must be a number.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                Push(FromDouble(-left.as.number));
+                double d = -peek(0).as.number;
+                Pop();
+                Push(FromDouble(d));
                 break;
-            case OP_NOT:
-                left = Pop();
-                Push(FromBoolean(!IsTruthy(left)));
+            }
+            case OP_NOT: {
+                bool res = !IsTruthy(peek(0));
+                Pop();
+                Push(FromBoolean(res));
                 break;
-            case OP_EQ:
-                Push(FromBoolean(ValuesEqual(Pop(), Pop())));
+            }
+            case OP_EQ: {
+                bool res = ValuesEqual(peek(0), peek(1));
+                Pop();
+                Pop();
+                Push(FromBoolean(res));
                 break;
-            case OP_NEQ:
-                Push(FromBoolean(!ValuesEqual(Pop(), Pop())));
+            }
+            case OP_NEQ: {
+                bool res = !ValuesEqual(peek(0), peek(1));
+                Pop();
+                Pop();
+                Push(FromBoolean(res));
                 break;
+            }
             case OP_LESS:
                 EXEC_NUM_BIN_OP(<, FromBoolean);
                 break;
@@ -356,26 +352,27 @@ static InterpretResult run() {
                 Pop();
                 Pop();
                 break;
-            case OP_IDENT_GLOBAL:
-                right = Pop(); // variable
-                if (Get(&vm.globals, AS_STRING(right), &left)) {
-                    Push(left);
+            case OP_IDENT_GLOBAL: {
+                Value value;
+                if (Get(&vm.globals, AS_STRING(peek(0)), &value)) {
+                    Pop();
+                    Push(value);
                     break;
                 }
                 runtimeError("Undefined identifier.");
                 return INTERPRET_RUNTIME_ERROR;
-            case OP_ASSIGN_GLOBAL:
-                // The call to Insert() might trigger a GC cycle. If 'right' and 'left' are not on the stack, the GC might collect them.
-                right = peek(0); // value
-                left = peek(0); // variable
-                if (Insert(&vm.globals, AS_STRING(left), right)) {
+            }
+            case OP_ASSIGN_GLOBAL: {
+                Value value = peek(0);
+                if (Insert(&vm.globals, AS_STRING(peek(1)), peek(0))) {
                    runtimeError("Undefined variable.");
                    return INTERPRET_RUNTIME_ERROR;
                 }
                 Pop();
                 Pop();
-                Push(right);
+                Push(value);
                 break;
+            }
             case OP_IDENT_LOCAL: {
                 uint8_t i = READ_BYTE();
                 Push(frame->slots[i]);
@@ -383,7 +380,9 @@ static InterpretResult run() {
             }
             case OP_ASSIGN_LOCAL: {
                 uint8_t i = READ_BYTE();
+                DecrementRefcountValue(frame->slots[i]);
                 frame->slots[i] = peek(0);
+                IncrementRefcountValue(frame->slots[i]);
                 break;
             }
             case OP_IDENT_UPVALUE: {
@@ -393,7 +392,10 @@ static InterpretResult run() {
             }
             case OP_ASSIGN_UPVALUE: {
                 uint8_t index = READ_BYTE();
-                *frame->closure->upvalues[index]->location = peek(0); 
+                Value *value = frame->closure->upvalues[index]->location;
+                DecrementRefcountValue(*value);
+                *value = peek(0); 
+                IncrementRefcountValue(*value);
                 break;
             }
             case OP_CLOSE_UPVALUE:
@@ -435,7 +437,9 @@ static InterpretResult run() {
                         runtimeError("Call to native function failed.");
                         return INTERPRET_RUNTIME_ERROR;
                     }
-                    vm.stack_top -= argc + 1;
+                    for (int i = 0; i < argc + 1; i++) {
+                        Pop();
+                    }
                     Push(result.value);
                     break;
                 }
@@ -474,6 +478,7 @@ static InterpretResult run() {
                     } else {
                         closure->upvalues[i] = frame->closure->upvalues[index];
                     }
+                    IncrementRefcountObject((Obj*) closure->upvalues[i]);
                 }
                 break;
             }
@@ -485,20 +490,33 @@ static InterpretResult run() {
                 ObjFunction *function = AS_FUNCTION(READ_CONSTANT(offset));
                 ObjClosure *closure = NewClosure(function);
                 Push(FromObj((Obj*) closure));
+                for (int i = 0; i < closure->upvalue_count; i++) {
+                    uint8_t is_local = READ_BYTE();
+                    uint8_t index = READ_BYTE();
+                    if (is_local) {
+                        closure->upvalues[i] = captureUpvalue(frame->slots + index);
+                    } else {
+                        closure->upvalues[i] = frame->closure->upvalues[index];
+                    }
+                    IncrementRefcountObject((Obj*) closure->upvalues[i]);
+                }
                 break;
             }
             case OP_RETURN: {
-                Value v = Pop();
+                Value v = peek(0); IncrementRefcountValue(v); Pop();
                 closeUpvalues(frame->slots);
                 
                 vm.frame_count--;
                 if (vm.frame_count == 0) {
+                    DecrementRefcountValue(v);
                     Pop();
                     return INTERPRET_OK;
                 }
                 
-                vm.stack_top = frame->slots;
-                Push(v);
+                while (vm.stack_top != frame->slots) {
+                    Pop();
+                }
+                Push(v); DecrementRefcountValue(v);
                 
                 frame = &vm.frames[vm.frame_count - 1];
                 ip = frame->ip;
@@ -523,11 +541,9 @@ InterpretResult Interpret(const char *source) {
         return INTERPRET_COMPILE_ERROR;
     }
     
-    // Put 'script' onto the stack just to make the GC aware of it.
-    Push(FromObj((Obj*) script));
     ObjClosure *closure = NewClosure(script);
-    Pop();
     Push(FromObj((Obj*) closure));
+    DecrementRefcountObject((Obj*) script); // Compile() returns script with refcount = 1
     
     CallFrame *frame = &vm.frames[vm.frame_count++];
     frame->closure = closure;
@@ -535,8 +551,6 @@ InterpretResult Interpret(const char *source) {
     frame->slots = vm.stack;
     
     InterpretResult result = run();
-    
-    FreeObj((Obj*) script);
     
     return result;
 }

@@ -141,7 +141,7 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
   
   compiler->function_depth = -1;
   compiler->scope_depth = 0;
-  compiler->function = NewFunction();
+  compiler->function = NewFunction(); IncrementRefcountObject((Obj*) compiler->function);
   current = compiler;
   
   // The function being compiled itself is the first local.
@@ -1129,7 +1129,6 @@ static void functionDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
   Token name = parser.previous; 
   Obj *name_obj = FromString(name.start, name.length);
-  Push(FromObj(name_obj));
   
   // Declare the function before defining it because the function might be recursive.
   bool is_global = false;
@@ -1149,7 +1148,7 @@ static void functionDeclaration() {
   
   Compiler compiler;
   initCompiler(&compiler, TYPE_FUNCTION);
-  compiler.function->name = (ObjString*) name_obj;
+  compiler.function->name = (ObjString*) name_obj; IncrementRefcountObject((Obj*) name_obj);
   beginScope();
   
   consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
@@ -1180,8 +1179,7 @@ static void functionDeclaration() {
   if (is_global) {
     emitByte(OP_VAR_DECL); 
   }
-  
-  Pop(); // name_obj
+  DecrementRefcountObject((Obj*) function); // initCompiler() initialises the function's refcount to 1
 }
 
 static void returnStatement() {
@@ -1262,19 +1260,9 @@ ObjFunction *Compile(const char *source) {
   FREE_ARRAY(Global, Globals, Global_capacity);
   
   ObjFunction *function = endCompiler();
-  Push(FromObj((Obj*) function)); // To prevent the GC from freeing it
   
   freeCompiler(&compiler);
   current = NULL;
   
-  Pop();
-  
   return parser.had_error ? NULL : function;
-}
-
-void MarkCompilerRoots() {
-  for (Compiler *compiler = current; compiler != NULL; compiler = compiler->enclosing) {
-    MarkObject((Obj*) compiler->function);
-  }
-  
 }

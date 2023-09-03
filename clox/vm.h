@@ -20,16 +20,13 @@ typedef struct {
   
   Value stack[STACK_MAX];
   Value *stack_top;
+  
   Table strings;
   Table globals;
+  
   ObjUpvalue *open_upvalues;
   
-  size_t bytes_allocated;
-  size_t next_gc;
   Obj *objects;
-  Obj **gray_stack;
-  int gray_capacity;
-  int gray_count;
 } VM;
 
 typedef enum {
