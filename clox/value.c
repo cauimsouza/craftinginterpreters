@@ -27,13 +27,13 @@ void PrintValue(Value value) {
     }
 }
 
-void InitValueArray(ValueArray* array) {
+void InitValueArray(ValueArray *array) {
     array->count = 0;
     array->capacity = 0;
     array->values = NULL;
 }
 
-void WriteValueArray(ValueArray* array, Value value) {
+void WriteValueArray(ValueArray *array, Value value) {
     if (array->count == array->capacity) {
         array->capacity = GROW_CAPACITY(array->capacity);
         array->values = GROW_ARRAY(Value, array->values, array->count, array->capacity);
@@ -43,11 +43,17 @@ void WriteValueArray(ValueArray* array, Value value) {
     array->count++;
 }
 
-void FreeValueArray(ValueArray* array) {
+void FreeValueArray(ValueArray *array) {
     for (int i = 0; i < array->count; i++) {
         DecrementRefcountValue(array->values[i]);
     }
     
     FREE_ARRAY(Value, array->values, array->capacity);
     InitValueArray(array);
+}
+
+void MarkValueArray(ValueArray *array) {
+    for (int i = 0; i < array->count; i++) {
+        MarkValue(array->values[i]);
+    }
 }

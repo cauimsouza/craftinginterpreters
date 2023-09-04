@@ -10,6 +10,8 @@
 #include "value.h"
 #include "vm.h"
 
+#define PUSH_OBJ(value) Push(FromObj((Obj*) (value)))
+
 VM vm; 
 
 void Push(Value value) {
@@ -78,25 +80,25 @@ ValueOpt Print(int argc, Value *argv) {
 }
 
 static void defineNatives() {
-    ObjString *name_obj = (ObjString*) FromString("rand", 4);
-    Value value = FromObj((Obj*) NewNative(Rand, 0));
-    Insert(&vm.globals, name_obj, value);
+    ObjString *name_obj = (ObjString*) FromString("rand", 4); PUSH_OBJ(name_obj);
+    Value value = FromObj((Obj*) NewNative(Rand, 0)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
     
-    name_obj = (ObjString*) FromString("clock", 5);
-    value = FromObj((Obj*) NewNative(Clock, 0));
-    Insert(&vm.globals, name_obj, value);
+    name_obj = (ObjString*) FromString("clock", 5); PUSH_OBJ(name_obj);
+    value = FromObj((Obj*) NewNative(Clock, 0)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
     
-    name_obj = (ObjString*) FromString("sqrt", 4);
-    value = FromObj((Obj*) NewNative(Sqrt, 1));
-    Insert(&vm.globals, name_obj, value);
+    name_obj = (ObjString*) FromString("sqrt", 4); PUSH_OBJ(name_obj);
+    value = FromObj((Obj*) NewNative(Sqrt, 1)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
     
-    name_obj = (ObjString*) FromString("len", 3);
-    value = FromObj((Obj*) NewNative(Len, 1));
-    Insert(&vm.globals, name_obj, value);
+    name_obj = (ObjString*) FromString("len", 3); PUSH_OBJ(name_obj);
+    value = FromObj((Obj*) NewNative(Len, 1)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
     
-    name_obj = (ObjString*) FromString("print", 5);
-    value = FromObj((Obj*) NewNative(Print, 1));
-    Insert(&vm.globals, name_obj, value);
+    name_obj = (ObjString*) FromString("print", 5); PUSH_OBJ(name_obj);
+    value = FromObj((Obj*) NewNative(Print, 1)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
 }
 
 // End of declaration of native functions
@@ -112,6 +114,9 @@ void InitVM() {
     vm.open_upvalues = NULL;
     
     vm.objects = NULL;
+    vm.grey_objects = NULL;
+    vm.grey_count = 0;
+    vm.grey_capacity = 0;
     
     defineNatives();
 }
@@ -133,6 +138,8 @@ void FreeVM() {
     while (vm.objects != NULL) {
         FreeObj(vm.objects);
     }
+    
+    free(vm.grey_objects);
 }
 
 static Value peek(int index) {
@@ -159,10 +166,11 @@ static void runtimeError(const char *message) {
 }
 
 static void concatenate() {
-    Obj *right_string = Pop().as.obj;
-    Obj *left_string = Pop().as.obj;
+    Obj *right_string = peek(0).as.obj;
+    Obj *left_string = peek(1).as.obj;
     Obj *sum = Concatenate(left_string, right_string);
-    Push(FromObj(sum));
+    Pop(); Pop();
+    PUSH_OBJ(sum);
 }
 
 static ObjUpvalue *captureUpvalue(Value *slot) {
@@ -220,13 +228,14 @@ static InterpretResult run() {
 #define AS_NATIVE(value) ((ObjNative*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
-        Value right = Pop(); \
-        Value left = Pop(); \
+        Value right = peek(0); \
+        Value left = peek(1); \
         if (!IsNumber(right) || !IsNumber(left)) { \
             runtimeError("Operands must be numbers."); \
             return INTERPRET_RUNTIME_ERROR; \
         } \
         Value result = toValue(left.as.number op right.as.number); \
+        Pop(); Pop(); \
         Push(result); \
     } while (false)
 
@@ -274,28 +283,22 @@ static InterpretResult run() {
                     runtimeError("Operand must be a number.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                double d = -peek(0).as.number;
-                Pop();
+                double d = -peek(0).as.number; Pop();
                 Push(FromDouble(d));
                 break;
             }
             case OP_NOT: {
-                bool res = !IsTruthy(peek(0));
-                Pop();
+                bool res = !IsTruthy(peek(0)); Pop();
                 Push(FromBoolean(res));
                 break;
             }
             case OP_EQ: {
-                bool res = ValuesEqual(peek(0), peek(1));
-                Pop();
-                Pop();
+                bool res = ValuesEqual(peek(0), peek(1)); Pop(); Pop();
                 Push(FromBoolean(res));
                 break;
             }
             case OP_NEQ: {
-                bool res = !ValuesEqual(peek(0), peek(1));
-                Pop();
-                Pop();
+                bool res = !ValuesEqual(peek(0), peek(1)); Pop(); Pop();
                 Push(FromBoolean(res));
                 break;
             }
@@ -317,8 +320,10 @@ static InterpretResult run() {
                     break;
                 }
                 if (IsNumber(peek(0)) && IsNumber(peek(1))) {
-                   Push(FromDouble(Pop().as.number + Pop().as.number));
-                   break;
+                    Value result = FromDouble(peek(0).as.number + peek(1).as.number);
+                    Pop(); Pop();
+                    Push(result);
+                    break;
                 }
                 runtimeError("Operands must be two strings or two numbers.");
                 return INTERPRET_RUNTIME_ERROR;
@@ -541,7 +546,9 @@ InterpretResult Interpret(const char *source) {
         return INTERPRET_COMPILE_ERROR;
     }
     
+    PUSH_OBJ(script); // NewClosure() may trigger a GC cycle
     ObjClosure *closure = NewClosure(script);
+    Pop(); // script
     Push(FromObj((Obj*) closure));
     DecrementRefcountObject((Obj*) script); // Compile() returns script with refcount = 1
     

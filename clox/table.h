@@ -34,4 +34,6 @@ void Delete(Table *table, ObjString *key);
 // Returns the string interned in the table if it exists, NULL otherwise.
 ObjString *Intern(Table *table, ObjString *key);
 
+void MarkTable(Table *table);
+
 #endif

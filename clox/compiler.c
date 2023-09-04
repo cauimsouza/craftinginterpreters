@@ -1128,7 +1128,7 @@ static void breakStatement() {
 static void functionDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
   Token name = parser.previous; 
-  Obj *name_obj = FromString(name.start, name.length);
+  Obj *name_obj = FromString(name.start, name.length); Push(FromObj((Obj*) name_obj));
   
   // Declare the function before defining it because the function might be recursive.
   bool is_global = false;
@@ -1179,7 +1179,12 @@ static void functionDeclaration() {
   if (is_global) {
     emitByte(OP_VAR_DECL); 
   }
-  DecrementRefcountObject((Obj*) function); // initCompiler() initialises the function's refcount to 1
+  
+  // initCompiler() initialises the function's refcount to 1, but now the chunk
+  // of the outer function being compiled references it.
+  DecrementRefcountObject((Obj*) function);
+  
+  Pop(); // name_obj
 }
 
 static void returnStatement() {
@@ -1260,9 +1265,18 @@ ObjFunction *Compile(const char *source) {
   FREE_ARRAY(Global, Globals, Global_capacity);
   
   ObjFunction *function = endCompiler();
+  Push(FromObj((Obj*) function)); // freeCompiler() may trigger a GC cycle
   
   freeCompiler(&compiler);
   current = NULL;
   
+  Pop(); // function
+  
   return parser.had_error ? NULL : function;
+}
+
+void MarkCompilerRoots() {
+  for (Compiler *compiler = current; compiler != NULL; compiler = compiler->enclosing) {
+    MarkObj((Obj*) compiler->function);
+  }
 }

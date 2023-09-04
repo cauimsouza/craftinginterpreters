@@ -48,6 +48,8 @@ void InitValueArray(ValueArray *array);
 void WriteValueArray(ValueArray *array, Value value);
 void FreeValueArray(ValueArray *array);
 
+void MarkValueArray(ValueArray *array);
+
 static inline Value FromBoolean(bool boolean) {
     return (Value) {
         .type = VAL_BOOL,

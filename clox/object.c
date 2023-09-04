@@ -24,6 +24,7 @@ static Obj *allocateObj(size_t size, ObjType type) {
     Obj *obj = (Obj*) Reallocate(NULL, 0, size);
     obj->type = type;
     obj->refcount = 0;
+    obj->marked = false;
     obj->prev = NULL;
     obj->next = vm.objects;
     if (vm.objects != NULL) {
@@ -44,6 +45,7 @@ Obj *FromString(const char *chars, size_t length) {
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
     obj->obj.refcount = 0;
+    obj->obj.marked = false;
     obj->obj.prev = NULL;
     obj->obj.next = vm.objects;
     if (vm.objects != NULL) {
@@ -68,7 +70,7 @@ Obj *FromString(const char *chars, size_t length) {
         FreeObj((Obj*) obj);
         return (Obj*) interned;
     }
-    Push(FromObj((Obj*) obj)); // Push it onto the queue so that the GC doesn't free it
+    Push(FromObj((Obj*) obj)); // Insert() may trigger a GC cycle
     Insert(&vm.strings, obj, FromNil());
     Pop();
     
@@ -82,6 +84,7 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
     size_t length = left->length + right ->length;
     ObjString *obj = ALLOCATE_FAM(ObjString, char, length + 1);
     obj->obj.type = OBJ_STRING;
+    obj->obj.marked = false;
     obj->obj.refcount = 0;
     obj->obj.prev = NULL;
     obj->obj.next = vm.objects;
@@ -112,7 +115,7 @@ Obj *Concatenate(const Obj *left_string, const Obj *right_string) {
         FreeObj((Obj*) obj);
         return (Obj*) interned;
     }
-    Push(FromObj((Obj*) obj)); // Push it onto the queue so that the GC doesn't free it
+    Push(FromObj((Obj*) obj)); // Insert() may trigger a GC cycle
     Insert(&vm.strings, obj, FromNil());
     Pop();
     
@@ -184,7 +187,12 @@ void FreeObj(Obj *obj) {
         PrintObj(obj);
         printf(" at address %p\n", (void*) obj);
     #endif
+    
+    // During GC cycles, FreeObj() is called on objects with refcount > 0.
+    // Outside GC cycles, FreeObj() should only be called when the object's refcount reaches 0.
+    obj->refcount = 0;
 
+    // Removes the object from the vm.objects linked list.
     Obj *prev = obj->prev;
     Obj *next = obj->next;
     if (prev != NULL) {
@@ -202,7 +210,6 @@ void FreeObj(Obj *obj) {
             FREE(ObjString, obj);
             break;
         case OBJ_FUNCTION: {
-            // We don't need to free the function name here because the GC will do that for us.
             ObjFunction *function = (ObjFunction*) obj;
             if (function->name != NULL) {
                 // function->name == NULL when function = <script>
@@ -216,13 +223,14 @@ void FreeObj(Obj *obj) {
             FREE(ObjNative, obj);
             break;
         case OBJ_CLOSURE: {
-            // A closure doesn't own the function it encloses. In fact, there may be
-            // many closures for the same function, so we don't free the enclosed function.
-            // We don't free upvalues (multiple closures may close over the same variable),
-            // but we do free the array of upvalues.
             ObjClosure *closure = (ObjClosure*) obj;
             
+            // A closure doesn't own the function it encloses. In fact, there may be
+            // many closures for the same function, so we don't free the enclosed function.
             DecrementRefcountObject((Obj*) closure->function);
+            
+            // We don't free upvalues (multiple closures may close over the same variable),
+            // but we do free the array of upvalues.
             for (int i = 0; i < closure->upvalue_count; i++) {
                 DecrementRefcountObject((Obj*) closure->upvalues[i]);
             }
@@ -232,9 +240,9 @@ void FreeObj(Obj *obj) {
             break;
         }
         case OBJ_UPVALUE: {
-            // Don't free the variable because multiple closures may close over it.
             ObjUpvalue *upvalue = (ObjUpvalue*) obj;
             
+            // Don't free the variable because multiple closures may close over it.
             DecrementRefcountValue(*upvalue->location);
             
             FREE(ObjUpvalue, obj);

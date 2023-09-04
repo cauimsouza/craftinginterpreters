@@ -171,3 +171,15 @@ ObjString *Intern(Table *table, ObjString *key) {
         i = (i + 1) % table->capacity;
     }
 }
+
+void MarkTable(Table *table) {
+    for (size_t i = 0; i < table->capacity; i++) {
+        Entry *entry = &table->entries[i];
+        if (entry->key == NULL) {
+            continue;
+        }
+        
+        MarkObj((Obj*) entry->key);
+        MarkValue(entry->value);
+    }
+}

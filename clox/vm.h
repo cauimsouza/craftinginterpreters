@@ -26,7 +26,11 @@ typedef struct {
   
   ObjUpvalue *open_upvalues;
   
+  // GC data structures
   Obj *objects;
+  Obj **grey_objects;
+  int grey_count;
+  int grey_capacity;
 } VM;
 
 typedef enum {

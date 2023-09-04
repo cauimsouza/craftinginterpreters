@@ -33,4 +33,8 @@ void IncrementRefcountObject(Obj *obj);
 void DecrementRefcountValue(Value value);
 void DecrementRefcountObject(Obj *obj);
 
+void CollectGarbage();
+void MarkObj(Obj *obj);
+void MarkValue(Value value);
+
 #endif

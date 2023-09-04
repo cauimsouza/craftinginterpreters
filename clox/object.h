@@ -17,7 +17,10 @@ typedef enum {
 
 struct Obj {
    ObjType type; 
+   
+   // GC related fields
    int refcount;
+   bool marked;
    struct Obj *prev;
    struct Obj *next;
 };

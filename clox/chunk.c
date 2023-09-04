@@ -22,6 +22,10 @@ void FreeChunk(Chunk *chunk) {
     InitChunk(chunk);
 }
 
+void MarkChunk(Chunk *chunk) {
+    MarkValueArray(&chunk->constants);
+}
+
 void WriteChunk(Chunk *chunk, uint8_t byte, int line) {
     if (chunk->count == chunk->capacity) {
         chunk->capacity = GROW_CAPACITY(chunk->capacity);
