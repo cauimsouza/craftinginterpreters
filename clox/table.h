@@ -29,11 +29,11 @@ bool Insert(Table *table, ObjString *key, Value value);
 // If key is not in the table, value is unchanged and false is returned.
 bool Get(Table *table, ObjString *key, Value *value);
 
-void Delete(Table *table, ObjString *key);
-
 // Returns the string interned in the table if it exists, NULL otherwise.
 ObjString *Intern(Table *table, ObjString *key);
 
+// GC related functions
 void MarkTable(Table *table);
+void RemoveUnmarkedKeys(Table *table);
 
 #endif

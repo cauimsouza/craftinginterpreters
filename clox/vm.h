@@ -27,6 +27,8 @@ typedef struct {
   ObjUpvalue *open_upvalues;
   
   // GC data structures
+  size_t bytes_allocated;
+  size_t next_gc; // Next GC cycle will be triggered when bytes_allocated > next_gc
   Obj *objects;
   Obj **grey_objects;
   int grey_count;

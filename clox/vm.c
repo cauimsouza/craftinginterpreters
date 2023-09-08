@@ -10,6 +10,8 @@
 #include "value.h"
 #include "vm.h"
 
+#define FIRST_GC 1024 * 1024
+
 #define PUSH_OBJ(value) Push(FromObj((Obj*) (value)))
 
 VM vm; 
@@ -113,6 +115,8 @@ void InitVM() {
     
     vm.open_upvalues = NULL;
     
+    vm.bytes_allocated = 0;
+    vm.next_gc = FIRST_GC;
     vm.objects = NULL;
     vm.grey_objects = NULL;
     vm.grey_count = 0;

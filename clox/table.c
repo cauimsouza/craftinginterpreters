@@ -6,12 +6,13 @@
 #include "table.h"
 #include "value.h"
 
+#define TOMBSTONE_VAL FromBoolean(true)
+
 inline static bool isTombstone(Entry *entry) {
     return entry->key == NULL && IsBoolean(entry->value) && entry->value.as.boolean;
 }
 
-// probe assumes the table is not full.
-// key may be in the table.
+//  Assumes the table is not full and is non-empty.
 static Entry *probe(Table *table, ObjString *key) {
     Entry *tombstone = NULL;
     size_t i = key->hash % table->capacity;
@@ -124,7 +125,7 @@ bool Insert(Table *table, ObjString *key, Value value) {
 
 bool Get(Table *table, ObjString *key, Value *value) {
     if (table->count == 0) {
-       return NULL; 
+        return false;     
     }
     
     Entry *entry = probe(table, key);
@@ -133,22 +134,6 @@ bool Get(Table *table, ObjString *key, Value *value) {
     }
     *value = entry->value;
     return true;
-}
-
-void Delete(Table *table, ObjString *key) {
-    if (table->count == 0) {
-        return;
-    }
-    
-    Entry *entry = probe(table, key);
-    if (entry->key == NULL) {
-        return;
-    }
-    
-    DecrementRefcountObject((Obj*) entry->key);
-    
-    entry->key = NULL;
-    entry->value = FromBoolean(true);
 }
 
 ObjString *Intern(Table *table, ObjString *key) {
@@ -181,5 +166,15 @@ void MarkTable(Table *table) {
         
         MarkObj((Obj*) entry->key);
         MarkValue(entry->value);
+    }
+}
+
+void RemoveUnmarkedKeys(Table *table) {
+    for (size_t i = 0; i < table->capacity; i++) {
+        Entry *entry = &table->entries[i];
+        if (entry->key != NULL && !entry->key->obj.marked) {
+            entry->key = NULL;
+            entry->value = TOMBSTONE_VAL;
+        }
     }
 }

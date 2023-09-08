@@ -11,17 +11,42 @@
 #include "debug.h"
 #endif
 
+#define GC_HEAP_GROWTH_FACTOR 2
+
 void *Reallocate(void *pointer, size_t old_size, size_t new_size) {
+    #ifdef DEBUG_LOG_GC
+        printf("Reallocate(%p, %d, %d)\n", pointer, old_size, new_size);
+    #endif
+    
+    if (new_size > old_size) {
+        // Because we check if new_size > old_size, we will never enter here
+        // during a GC cycle.
+        
+        #ifdef DEBUG_STRESS_GC
+            CollectGarbage();
+        #else
+            if (vm.bytes_allocated > vm.next_gc) {
+                CollectGarbage();
+            }
+        #endif
+    }
+    
+    // We can't simply vm.bytes_allocated += new_size - old_size because
+    // new_size - old_size may be negative and size_t is an unsigned type.
+    vm.bytes_allocated += new_size;
+    vm.bytes_allocated -= old_size;
+    
     if (new_size == 0) {
         free(pointer);
         return NULL;
     }
     
-    void* result = realloc(pointer, new_size);
-    if (result == NULL) {
+    pointer = realloc(pointer, new_size);
+    if (pointer == NULL) {
         exit(1);
     }
-    return result;
+    
+    return pointer;
 }
 
 void IncrementRefcountValue(Value value) {
@@ -36,9 +61,9 @@ void IncrementRefcountObject(Obj *obj) {
     obj->refcount++;    
     
     #ifdef DEBUG_LOG_GC
-    printf("Increment refcount of ");
-    PrintObj(obj);
-    printf(" to %d\n", obj->refcount);
+        printf("Increment refcount of ");
+        PrintObj(obj);
+        printf(" (%p) to %d\n", (void*) obj, obj->refcount);
     #endif
 }
 
@@ -61,7 +86,7 @@ void DecrementRefcountObject(Obj *obj) {
     #ifdef DEBUG_LOG_GC
         printf("Decrement refcount of ");
         PrintObj(obj);
-        printf(" to %d\n", obj->refcount);
+        printf(" (%p) to %d\n", (void*) obj, obj->refcount);
     #endif
     
     if (obj->refcount == 0) {
@@ -74,9 +99,20 @@ void MarkObj(Obj *obj) {
         return;
     }
     
+    #ifdef DEBUG_LOG_GC
+        printf("mark ");
+        PrintObj(obj);
+        printf(" (%p)\n", (void*) obj);
+    #endif
+    
     if (vm.grey_count >= vm.grey_capacity) {
         vm.grey_capacity = GROW_CAPACITY(vm.grey_capacity);
-        vm.grey_objects = (Obj**) realloc(vm.grey_objects, vm.grey_capacity);
+        
+        #ifdef DEBUG_LOG_GC
+            printf("MarkObj call to realloc(%p, %d)\n", (void*) vm.grey_objects, vm.grey_capacity);
+        #endif
+        
+        vm.grey_objects = (Obj**) realloc(vm.grey_objects, vm.grey_capacity * sizeof(Obj*));
         if (vm.grey_objects == NULL) {
             exit(1);
         }
@@ -102,7 +138,6 @@ static void markRoots() {
         MarkValue(*value);
     }
     
-    MarkTable(&vm.strings); // TODO: These are weak references
     MarkTable(&vm.globals);
     
     for (ObjUpvalue *upvalue = vm.open_upvalues; upvalue != NULL; upvalue = upvalue->next) {
@@ -113,12 +148,20 @@ static void markRoots() {
 }
 
 static void blackify(Obj *obj) {
+    #ifdef DEBUG_LOG_GC
+        printf("blackify ");
+        PrintObj(obj);
+        printf(" (%p)\n", (void*) obj);
+    #endif
+    
     switch (obj->type) {
         case OBJ_STRING:
             break;
         case OBJ_FUNCTION: {
             ObjFunction *function = (ObjFunction*) obj;
-            MarkObj((Obj*) function->name);
+            if (function->name != NULL) {
+                MarkObj((Obj*) function->name);
+            }
             MarkChunk(&function->chunk);
             break;
         }
@@ -128,7 +171,11 @@ static void blackify(Obj *obj) {
             ObjClosure *closure = (ObjClosure*) obj;
             MarkObj((Obj*) closure->function);
             for (int i = 0; i < closure->upvalue_count; i++) {
-                MarkObj((Obj*) closure->upvalues[i]);
+                Obj *upvalue = (Obj*) closure->upvalues[i];
+                if (upvalue != NULL) {
+                    // The GC may run *while* we construct the upvalues.
+                    MarkObj((Obj*) closure->upvalues[i]);
+                }
             }
             break;
         }
@@ -142,7 +189,7 @@ static void blackify(Obj *obj) {
     }
 }
 
-static void markReachable() {
+static void trace() {
     while (vm.grey_count > 0) {
         Obj *obj = vm.grey_objects[--vm.grey_count];
         blackify(obj);
@@ -180,8 +227,9 @@ static void sweep() {
 
 void CollectGarbage() {
     markRoots();
-    
-    markReachable();
-    
+    trace();
+    RemoveUnmarkedKeys(&vm.strings);
     sweep();
+    
+    vm.next_gc = vm.bytes_allocated * GC_HEAP_GROWTH_FACTOR;
 }
