@@ -98,6 +98,48 @@ ValueOpt HasProp(int argc, Value *argv) {
     };
 }
 
+ValueOpt SetProp(int argc, Value *argv) {
+    if (!IsInstance(argv[0]) || !IsString(argv[1])) {
+        return (ValueOpt) {
+            .error = true
+        };
+    }
+    
+    ObjInstance *instance = (ObjInstance*) argv[0].as.obj;
+    ObjString *property = (ObjString*) argv[1].as.obj;
+    Value value = argv[2];
+    
+    Insert(&instance->fields, property, value);
+    
+    return (ValueOpt) {
+        .value = FromNil(),
+        .error = false
+    };
+}
+
+ValueOpt GetProp(int argc, Value *argv) {
+    if (!IsInstance(argv[0]) || !IsString(argv[1])) {
+        return (ValueOpt) {
+            .error = true
+        };
+    }
+    
+    ObjInstance *instance = (ObjInstance*) argv[0].as.obj;
+    ObjString *property = (ObjString*) argv[1].as.obj;
+    
+    Value value;
+    if (Get(&instance->fields, property, &value)) {
+        return (ValueOpt) {
+            .value = value,
+            .error = false
+        };
+    }
+    
+    return (ValueOpt) {
+        .error = true
+    };
+}
+
 static void defineNatives() {
     ObjString *name_obj = (ObjString*) FromString("rand", 4); PUSH_OBJ(name_obj);
     Value value = FromObj((Obj*) NewNative(Rand, 0)); Push(value);
@@ -121,6 +163,14 @@ static void defineNatives() {
     
     name_obj = (ObjString*) FromString("hasProp", 7); PUSH_OBJ(name_obj);
     value = FromObj((Obj*) NewNative(HasProp, 2)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
+    
+    name_obj = (ObjString*) FromString("setProp", 7); PUSH_OBJ(name_obj);
+    value = FromObj((Obj*) NewNative(SetProp, 3)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
+    
+    name_obj = (ObjString*) FromString("getProp", 7); PUSH_OBJ(name_obj);
+    value = FromObj((Obj*) NewNative(GetProp, 2)); Push(value);
     Insert(&vm.globals, name_obj, value); Pop(); Pop();
 }
 
