@@ -81,6 +81,23 @@ ValueOpt Print(int argc, Value *argv) {
     };
 }
 
+ValueOpt HasProp(int argc, Value *argv) {
+    if (!IsInstance(argv[0]) || !IsString(argv[1])) {
+        return (ValueOpt) {
+            .error = true
+        };
+    }
+    
+    ObjInstance *instance = (ObjInstance*) argv[0].as.obj;
+    ObjString *property = (ObjString*) argv[1].as.obj;
+    
+    Value v;
+    return (ValueOpt) {
+        .value = FromBoolean(Get(&instance->fields, property, &v)),
+        .error = false
+    };
+}
+
 static void defineNatives() {
     ObjString *name_obj = (ObjString*) FromString("rand", 4); PUSH_OBJ(name_obj);
     Value value = FromObj((Obj*) NewNative(Rand, 0)); Push(value);
@@ -100,6 +117,10 @@ static void defineNatives() {
     
     name_obj = (ObjString*) FromString("print", 5); PUSH_OBJ(name_obj);
     value = FromObj((Obj*) NewNative(Print, 1)); Push(value);
+    Insert(&vm.globals, name_obj, value); Pop(); Pop();
+    
+    name_obj = (ObjString*) FromString("hasProp", 7); PUSH_OBJ(name_obj);
+    value = FromObj((Obj*) NewNative(HasProp, 2)); Push(value);
     Insert(&vm.globals, name_obj, value); Pop(); Pop();
 }
 
