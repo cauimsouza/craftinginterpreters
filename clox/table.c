@@ -108,19 +108,17 @@ bool Insert(Table *table, ObjString *key, Value value) {
     }
     
     Entry *entry = probe(table, key);
-    bool res = entry->key == NULL;
-    if (entry->key == NULL && !isTombstone(entry)) {
-        table->count++;
+    bool new_entry = entry->key == NULL;
+    if (new_entry) {
+        IncrementRefcountObject((Obj*) key);
+        if (!isTombstone(entry)) table->count++;
+    } else {
+        DecrementRefcountValue(entry->value);
     }
     entry->key = key;
-    entry->value = value;
+    entry->value = value; IncrementRefcountValue(value);
     
-    if (res) {
-        IncrementRefcountObject((Obj*) key);
-    }
-    IncrementRefcountValue(value);
-    
-    return res;
+    return new_entry;
 }
 
 bool Get(Table *table, ObjString *key, Value *value) {

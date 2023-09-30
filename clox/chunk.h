@@ -32,15 +32,13 @@ typedef enum {
   OP_ASSIGN_GLOBAL,
   OP_IDENT_LOCAL,
   OP_ASSIGN_LOCAL,
+  OP_IDENT_PROPERTY,
+  OP_ASSIGN_PROPERTY,
   OP_IDENT_UPVALUE,
   OP_ASSIGN_UPVALUE,
   OP_CLOSE_UPVALUE,
-  
-  // Jumps if top of the stack is falsey. It has one 2B operand, the offset to move ip.
-  OP_JUMP_IF_FALSE, 
-  // Jumps unconditionally. It has one 2B operand, the offset to move ip. 
-  OP_JUMP,
-  
+  OP_JUMP_IF_FALSE, // Jumps if top of the stack is falsey. It has one 2B operand, the offset to move ip.
+  OP_JUMP, // Jumps unconditionally. It has one 2B operand, the offset to move ip. 
   OP_DUPLICATE, // Duplicates the value at the top of the stack
   OP_CALL,
   OP_CLOSURE,

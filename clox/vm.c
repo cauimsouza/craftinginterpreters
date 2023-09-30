@@ -230,6 +230,8 @@ static InterpretResult run() {
 #define AS_FUNCTION(value) ((ObjFunction*) (value).as.obj)
 #define AS_CLOSURE(value) ((ObjClosure*) (value).as.obj)
 #define AS_NATIVE(value) ((ObjNative*) (value).as.obj)
+#define AS_CLASS(value) ((ObjClass*) (value).as.obj)
+#define AS_INSTANCE(value) ((ObjInstance*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
         Value right = peek(0); \
@@ -289,6 +291,7 @@ static InterpretResult run() {
                 }
                 double d = -peek(0).as.number; Pop();
                 Push(FromDouble(d));
+                
                 break;
             }
             case OP_NOT: {
@@ -350,7 +353,7 @@ static InterpretResult run() {
                 }
                 break;
             }
-            case OP_VAR_DECL:
+            case OP_VAR_DECL: {
                 // The call to Insert() might trigger a GC cycle. If 'right' and 'left' are not on the stack, the GC might collect them.
                 right = peek(0); // value
                 left = peek(1); // variable
@@ -360,7 +363,9 @@ static InterpretResult run() {
                 }
                 Pop();
                 Pop();
+                
                 break;
+            }
             case OP_IDENT_GLOBAL: {
                 Value value;
                 if (Get(&vm.globals, AS_STRING(peek(0)), &value)) {
@@ -380,6 +385,7 @@ static InterpretResult run() {
                 Pop();
                 Pop();
                 Push(value);
+                
                 break;
             }
             case OP_IDENT_LOCAL: {
@@ -405,6 +411,7 @@ static InterpretResult run() {
                 DecrementRefcountValue(*value);
                 *value = peek(0); 
                 IncrementRefcountValue(*value);
+                
                 break;
             }
             case OP_CLOSE_UPVALUE:
@@ -428,8 +435,11 @@ static InterpretResult run() {
                 uint8_t argc = READ_BYTE();
                 
                 Value called_value = peek(argc);
-                if (!IsClosure(called_value) && !IsNative(called_value)) {
-                    runtimeError("Can only call functions.");
+                if (!IsNative(called_value) &&
+                    !IsClass(called_value) &&
+                    !IsClosure(called_value)
+                   ) {
+                    runtimeError("Can only call functions and constructors.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 
@@ -450,6 +460,22 @@ static InterpretResult run() {
                         Pop();
                     }
                     Push(result.value);
+                    
+                    break;
+                }
+                
+                if (IsClass(called_value)) {
+                    if (argc != 0) {
+                        runtimeError("Constructor with arguments not supported.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    ObjClass *class = AS_CLASS(called_value);
+                    ObjInstance *instance = NewInstance(class);
+                    for (int i = 0; i < argc + 1; i++) {
+                        Pop();
+                    }
+                    Push(FromObj((Obj*) instance));
+                    
                     break;
                 }
                 
@@ -489,6 +515,7 @@ static InterpretResult run() {
                     }
                     IncrementRefcountObject((Obj*) closure->upvalues[i]);
                 }
+                
                 break;
             }
             case OP_CLOSURE_LONG: {
@@ -509,6 +536,48 @@ static InterpretResult run() {
                     }
                     IncrementRefcountObject((Obj*) closure->upvalues[i]);
                 }
+                
+                break;
+            }
+            case OP_IDENT_PROPERTY: {
+                if (!IsInstance(peek(1))) {
+                    runtimeError("Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjInstance *instance = AS_INSTANCE(peek(1));
+                ObjString *field = AS_STRING(peek(0));
+                
+                Value value;
+                if (!Get(&instance->fields, field, &value)) {
+                    runtimeError("Instance does not have field.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                IncrementRefcountValue(value);
+                Pop(); // field
+                Pop(); // instance
+                Push(value);
+                
+                break;
+            }
+            case OP_ASSIGN_PROPERTY: {
+                if (!IsInstance(peek(2))) {
+                    runtimeError("Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjInstance *instance = AS_INSTANCE(peek(2));
+                ObjString *field = AS_STRING(peek(1));
+                Value value = peek(0); IncrementRefcountValue(value);
+                
+                Insert(&instance->fields, field, value);
+                
+                Pop(); // value
+                Pop(); // field
+                Pop(); // instance
+                Push(value); DecrementRefcountValue(value);
+                
                 break;
             }
             case OP_RETURN: {
@@ -529,12 +598,15 @@ static InterpretResult run() {
                 
                 frame = &vm.frames[vm.frame_count - 1];
                 ip = frame->ip;
+                
                 break;
             }
         }
     }
 
 #undef EXEC_NUM_BIN_OP
+#undef AS_INSTANCE
+#undef AS_CLASS
 #undef AS_NATIVE
 #undef AS_FUNCTION
 #undef AS_STRING

@@ -165,6 +165,21 @@ ObjNative *NewNative(NativeFn function, int arity) {
     return native;
 }
 
+ObjClass *NewClass(ObjString *name) {
+    ObjClass *class = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
+    class->name = name; IncrementRefcountObject((Obj*) name);
+    
+    return class;
+}
+
+ObjInstance *NewInstance(ObjClass *class) {
+    ObjInstance *instance = ALLOCATE_OBJ(ObjInstance, OBJ_INSTANCE);
+    instance->class = class; IncrementRefcountObject((Obj*) class);
+    InitTable(&instance->fields);
+    
+    return instance;
+}
+
 bool ObjsEqual(const Obj *a, const Obj *b) {
     if (a->type != b->type) {
         return false;
@@ -248,6 +263,19 @@ void FreeObj(Obj *obj) {
             FREE(ObjUpvalue, obj);
             break;
         }
+        case OBJ_CLASS: {
+            ObjClass *class = (ObjClass*) obj;
+            DecrementRefcountObject((Obj*) class->name);
+            FREE(ObjClass, obj);
+            break;
+        }
+        case OBJ_INSTANCE: {
+            ObjInstance *instance = (ObjInstance*) obj;
+            DecrementRefcountObject((Obj*) instance->class);
+            FreeTable(&instance->fields);
+            FREE(ObjInstance, obj);
+            break;
+        }
         default:
             printf("Freeing object at %p of invalid object type\n", (void*) obj);
             exit(1);
@@ -289,5 +317,20 @@ void FPrintObj(FILE *stream, const Obj *obj) {
         case OBJ_UPVALUE:
             printf("upvalue");
             break;
+        case OBJ_CLASS: {
+            printf("<class ");
+            FPrintObj(stream, (Obj*) ((ObjClass*) obj)->name);
+            printf(">");
+            break;
+        }
+        case OBJ_INSTANCE: {
+            printf("<instance ");
+            FPrintObj(stream, (Obj*) ((ObjInstance*) obj)->class->name);
+            printf(">");
+            break;
+        }
+        default:
+            printf("Printing object at %p of invalid object type\n", (void*) obj);
+            exit(1);
     }
 }

@@ -184,6 +184,17 @@ static void blackify(Obj *obj) {
             MarkValue(*upvalue->location);
             break;
         }
+        case OBJ_CLASS: {
+            ObjClass *class = (ObjClass*) obj;
+            MarkObj((Obj*) class->name);
+            break;
+        }
+        case OBJ_INSTANCE: {
+            ObjInstance *instance = (ObjInstance*) obj;
+            MarkObj((Obj*) instance->class);
+            MarkTable(&instance->fields);
+            break;
+        }
         default:
             exit(1);
     }

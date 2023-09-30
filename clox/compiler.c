@@ -738,13 +738,26 @@ static void call(bool can_assign) {
   emitByte(argc);
 }
 
+static void property(bool can_assign) {
+  consume(TOKEN_IDENTIFIER, "Expect identifier after property accessor ('.').") ;
+  Obj *name = FromString(parser.previous.start, parser.previous.length);
+  emitConstant(FromObj(name)); 
+  
+  if (can_assign && match(TOKEN_EQUAL)) {
+    parsePrecedence(PREC_ASSIGNMENT);
+    emitByte(OP_ASSIGN_PROPERTY);
+  } else {
+    emitByte(OP_IDENT_PROPERTY);
+  }
+}
+
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]           = {NULL,     property,   PREC_CALL},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
@@ -1127,14 +1140,14 @@ static void breakStatement() {
 
 static void functionDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
-  Token name = parser.previous; 
-  Obj *name_obj = FromString(name.start, name.length); Push(FromObj((Obj*) name_obj));
+  Token name_token = parser.previous; 
+  Obj *name_obj = FromString(name_token.start, name_token.length); Push(FromObj(name_obj));
   
   // Declare the function before defining it because the function might be recursive.
   bool is_global = false;
   if (current->scope_depth > 0) {
     // Function declared inside a block or inside the body of another function
-    if (!declareLocal(current, name, /*is_const=*/ false)) {
+    if (!declareLocal(current, name_token, /*is_const=*/ false)) {
         error("Already an identifier with this name in this scope."); 
     }
     current->locals[current->local_count - 1].depth = current->scope_depth;
@@ -1187,6 +1200,40 @@ static void functionDeclaration() {
   Pop(); // name_obj
 }
 
+static void classDeclaration() {
+  consume(TOKEN_IDENTIFIER, "Expect identifier after 'class'.");
+  Token name_token = parser.previous; 
+  Obj *name_obj = FromString(name_token.start, name_token.length); Push(FromObj((Obj*) name_obj));
+  
+  // Declare the class before defining it because the class' body might refer to itself.
+  bool is_global = false;
+  if (current->scope_depth > 0) {
+    // Class declared inside a block or in the body of a function
+    if (!declareLocal(current, name_token, /*is_const=*/ false)) {
+        error("Already an identifier with this name in this scope."); 
+    }
+    current->locals[current->local_count - 1].depth = current->scope_depth;
+  } else {
+    // Class declared in the global scope
+    is_global = true;
+    Global *global = getGlobal(name_obj);
+    global->is_const = false;
+    emitConstant(FromObj(name_obj)); 
+  }
+  
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after class name.");
+  // TODO: Complete
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' at the end of class declaration.");
+  
+  ObjClass *class = NewClass((ObjString*) name_obj);
+  emitConstant(FromObj((Obj*) class));
+  if (is_global) {
+    emitByte(OP_VAR_DECL);
+  }
+  
+  Pop(); // name_obj
+}
+
 static void returnStatement() {
   if (current->type == TYPE_SCRIPT) {
     error("Can't return from top-level code.");  
@@ -1234,6 +1281,8 @@ static void declaration() {
     variableDeclaration(/*is_const=*/true);
   } else if (match(TOKEN_FUN)) {
     functionDeclaration();
+  } else if (match(TOKEN_CLASS)) {
+    classDeclaration();  
   } else {
     statement(); 
   }

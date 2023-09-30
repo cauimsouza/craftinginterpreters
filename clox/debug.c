@@ -119,6 +119,10 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return byteInstruction("OP_IDENT_LOCAL", chunk, offset);
         case OP_ASSIGN_LOCAL:
             return byteInstruction("OP_ASSIGN_LOCAL", chunk, offset);
+        case OP_IDENT_PROPERTY:
+            return simpleInstruction("OP_IDENT_PROPERTY", offset);
+        case OP_ASSIGN_PROPERTY:
+            return simpleInstruction("OP_ASSIGN_PROPERTY", offset);
         case OP_IDENT_UPVALUE:
             return byteInstruction("OP_IDENT_UPVALUE", chunk, offset);
         case OP_ASSIGN_UPVALUE:
