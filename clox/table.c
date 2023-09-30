@@ -134,6 +134,24 @@ bool Get(Table *table, ObjString *key, Value *value) {
     return true;
 }
 
+void Remove(Table *table, ObjString *key) {
+    if (table->count == 0) {
+        return;
+    }
+    
+    Entry *entry = probe(table, key);
+    if (entry->key == NULL) {
+        return;
+    }
+    
+    Value v = entry->value;
+    entry->key = NULL;
+    entry->value = TOMBSTONE_VAL;
+    
+    DecrementRefcountObject((Obj*) key);
+    DecrementRefcountValue(v);
+}
+
 ObjString *Intern(Table *table, ObjString *key) {
     if (table->capacity == 0) {
         return NULL;

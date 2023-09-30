@@ -29,6 +29,11 @@ bool Insert(Table *table, ObjString *key, Value value);
 // If key is not in the table, value is unchanged and false is returned.
 bool Get(Table *table, ObjString *key, Value *value);
 
+// Remove makes the entry associated with key free.
+//
+// If key is not in the table, Remove does nothing.
+void Remove(Table *table, ObjString *key);
+
 // Returns the string interned in the table if it exists, NULL otherwise.
 ObjString *Intern(Table *table, ObjString *key);
 
