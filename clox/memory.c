@@ -144,6 +144,11 @@ static void markRoots() {
         MarkObj((Obj*) upvalue);
     }
     
+    if (vm.init_string != NULL) {
+        // The GC might be called before init_string is initialised
+        MarkObj((Obj*) vm.init_string);
+    }
+    
     MarkCompilerRoots();
 }
 

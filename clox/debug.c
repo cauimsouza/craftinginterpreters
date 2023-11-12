@@ -60,6 +60,24 @@ static int shortInstructions(const char *name, Chunk *chunk, int offset) {
     return offset + 3;
 }
 
+static int invokeInstruction(const char *name, Chunk *chunk, int offset) {
+    uint8_t first = readNBytes(chunk, offset, 1);
+    uint8_t second = chunk->code[offset + 2];
+    printf("%-16s ", name);
+    PrintValue(chunk->constants.values[first]);
+    printf(" %8d\n", second);
+    return offset + 3;
+}
+
+static int invokeLongInstruction(const char *name, Chunk *chunk, int offset) {
+    uint8_t first = readNBytes(chunk, offset, 2);
+    uint8_t second = chunk->code[offset + 3];
+    printf("%-16s ", name);
+    PrintValue(chunk->constants.values[first]);
+    printf(" %8d\n", second);
+    return offset + 4;
+}
+
 int DisassembleInstruction(Chunk *chunk, int offset) {
     printf("%04d ", offset);
     
@@ -137,6 +155,10 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return simpleInstruction("OP_DUPLICATE", offset);
         case OP_CALL:
             return byteInstruction("OP_CALL", chunk, offset);
+        case OP_INVOKE:
+            return invokeInstruction("OP_INVOKE", chunk, offset);
+        case OP_INVOKE_LONG:
+            return invokeLongInstruction("OP_INVOKE_LONG", chunk, offset);
         case OP_CLOSURE:
             return closureInstruction("OP_CLOSURE", chunk, offset, 1);
         case OP_CLOSURE_LONG:

@@ -14,6 +14,14 @@
 
 #define PUSH_OBJ(value) Push(FromObj((Obj*) (value)))
 
+#define AS_STRING(value) ((ObjString*) (value).as.obj)
+#define AS_FUNCTION(value) ((ObjFunction*) (value).as.obj)
+#define AS_CLOSURE(value) ((ObjClosure*) (value).as.obj)
+#define AS_NATIVE(value) ((ObjNative*) (value).as.obj)
+#define AS_CLASS(value) ((ObjClass*) (value).as.obj)
+#define AS_INSTANCE(value) ((ObjInstance*) (value).as.obj)
+#define AS_BOUND_METHOD(value) ((ObjBoundMethod*) (value).as.obj)
+
 VM vm; 
 
 void Push(Value value) {
@@ -215,6 +223,8 @@ void InitVM() {
     vm.grey_count = 0;
     vm.grey_capacity = 0;
     
+    vm.init_string = NULL;
+    vm.init_string = (ObjString*) FromString("init", 4);
     defineNatives();
 }
 
@@ -228,6 +238,8 @@ void FreeVM() {
         printf("Freeing string table.\n");
     #endif
     FreeTable(&vm.strings);
+    
+    vm.init_string = NULL;
     
     #ifdef DEBUG_LOG_GC
         printf("Freeing remaining objects.\n");
@@ -306,6 +318,111 @@ static void closeUpvalues(Value *last) {
     }
 }
 
+static bool call(int argc,  CallFrame **framep, uint8_t **ipp) {
+    Value called_value = peek(argc);
+    if (!IsNative(called_value) &&
+        !IsClass(called_value) &&
+        !IsClosure(called_value)
+       ) {
+        runtimeError("Can only call functions, methods, and constructors.");
+        return false;
+    }
+    
+    if (IsNative(called_value)) {
+        ObjNative *native_obj = AS_NATIVE(called_value);
+        if (argc != native_obj->arity) {
+            runtimeError("Invalid number of arguments.");
+            return false;
+        }
+        
+        NativeFn fn = native_obj->function;
+        ValueOpt result = fn(argc, vm.stack_top - argc);
+        if (result.error) {
+            runtimeError("Call to native function failed.");
+            return false;
+        }
+        for (int i = 0; i < argc + 1; i++) {
+            Pop();
+        }
+        Push(result.value);
+    } else if (IsClass(called_value)) {
+        ObjClass *class = AS_CLASS(called_value);
+        Value init_val;
+        if (Get(&class->methods, vm.init_string, &init_val)) { // "init" method
+            ObjClosure *closure = AS_CLOSURE(init_val);
+            if (argc != closure->function->arity) {
+                runtimeError("Invalid number of arguments.");
+                return false;
+            }
+            
+            Value instance = FromObj((Obj*) NewInstance(class));
+            *(vm.stack_top - (argc + 1)) = instance;
+            IncrementRefcountValue(instance);
+            DecrementRefcountValue(called_value);
+            
+            (*framep)->ip = *ipp;
+            
+            *framep = &vm.frames[vm.frame_count++];
+            (*framep)->closure = closure;
+            (*framep)->ip = closure->function->chunk.code;
+            (*framep)->slots = vm.stack_top - argc - 1;
+            *ipp = (*framep)->ip;
+        } else { // No "init" method
+            if (argc != 0) {
+                runtimeError("Default constructor takes no arguments.");
+                return false;
+            }
+            
+            ObjInstance *instance = NewInstance(class);
+            Pop(); // class
+            Push(FromObj((Obj*) instance));
+        }
+    } else if (IsClosure(called_value)) {
+        ObjClosure *closure = AS_CLOSURE(called_value);
+        if (argc != closure->function->arity) {
+            runtimeError("Invalid number of arguments."); 
+            return false;
+        }
+        
+        if (vm.frame_count == FRAMES_MAX) {
+            runtimeError("Stack overflow.");
+            return false;
+        }
+        
+        (*framep)->ip = *ipp;
+        
+        *framep = &vm.frames[vm.frame_count++];
+        (*framep)->closure = closure;
+        (*framep)->ip = closure->function->chunk.code;
+        (*framep)->slots = vm.stack_top - argc - 1;
+        *ipp = (*framep)->ip;
+    }
+    
+    return true;
+}
+
+static bool methodCall(int argc, ObjClosure *method, CallFrame **framep, uint8_t **ipp) {
+    if (argc != method->function->arity) {
+        runtimeError("Invalid number of arguments");
+        return false;
+    }
+    
+    if (vm.frame_count == FRAMES_MAX) {
+        runtimeError("Stack overflow.");
+        return false;
+    }
+    
+    (*framep)->ip = *ipp;
+    
+    *framep = &vm.frames[vm.frame_count++];
+    (*framep)->closure = method;
+    (*framep)->ip = method->function->chunk.code;
+    (*framep)->slots = vm.stack_top - argc - 1;
+    *ipp = (*framep)->ip;
+    
+    return true;
+}
+
 static InterpretResult run() {
     CallFrame *frame = &vm.frames[vm.frame_count - 1];
     
@@ -313,19 +430,12 @@ static InterpretResult run() {
     // However, since 'ip' is used a lot, holding it in a local variable and using the 'register' hint
     // might make the compiler store it in a register rather than in the main memory, speeding up execution.
     // We need to be careful to load and store 'ip' back into the correct CallFrame when starting and ending function calls.
-    register uint8_t *ip = frame->ip;
+    uint8_t *ip = frame->ip;
     
 #define READ_BYTE() (*ip++)
 #define READ_SHORT() \
     (ip += 2, (int16_t) (ip[-2] | (ip[-1] << 8)))
 #define READ_CONSTANT(offset) (frame->closure->function->chunk.constants.values[(offset)])
-#define AS_STRING(value) ((ObjString*) (value).as.obj)
-#define AS_FUNCTION(value) ((ObjFunction*) (value).as.obj)
-#define AS_CLOSURE(value) ((ObjClosure*) (value).as.obj)
-#define AS_NATIVE(value) ((ObjNative*) (value).as.obj)
-#define AS_CLASS(value) ((ObjClass*) (value).as.obj)
-#define AS_INSTANCE(value) ((ObjInstance*) (value).as.obj)
-#define AS_BOUND_METHOD(value) ((ObjBoundMethod*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
         Value right = peek(0); \
@@ -556,16 +666,37 @@ static InterpretResult run() {
                     }
                     Push(result.value);
                 } else if (IsClass(called_value)) {
-                    if (argc != 0) {
-                        runtimeError("Constructor with arguments not supported.");
-                        return INTERPRET_RUNTIME_ERROR;
-                    }
                     ObjClass *class = AS_CLASS(called_value);
-                    ObjInstance *instance = NewInstance(class);
-                    for (int i = 0; i < argc + 1; i++) {
-                        Pop();
+                    Value init_val;
+                    if (Get(&class->methods, vm.init_string, &init_val)) { // "init" method
+                        ObjClosure *closure = AS_CLOSURE(init_val);
+                        if (argc != closure->function->arity) {
+                            runtimeError("Invalid number of arguments.");
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        
+                        Value instance = FromObj((Obj*) NewInstance(class));
+                        *(vm.stack_top - (argc + 1)) = instance;
+                        IncrementRefcountValue(instance);
+                        DecrementRefcountValue(called_value);
+                        
+                        frame->ip = ip;
+                        
+                        frame = &vm.frames[vm.frame_count++];
+                        frame->closure = closure;
+                        frame->ip = closure->function->chunk.code;
+                        frame->slots = vm.stack_top - argc - 1;
+                        ip = frame->ip;
+                    } else { // No "init" method
+                        if (argc != 0) {
+                            runtimeError("Default constructor takes no arguments.");
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        
+                        ObjInstance *instance = NewInstance(class);
+                        Pop(); // class
+                        Push(FromObj((Obj*) instance));
                     }
-                    Push(FromObj((Obj*) instance));
                 } else if (IsClosure(called_value)) {
                     ObjClosure *closure = AS_CLOSURE(called_value);
                     if (argc != closure->function->arity) {
@@ -599,7 +730,7 @@ static InterpretResult run() {
                         return INTERPRET_RUNTIME_ERROR;
                     }
                     
-                    *(vm.stack_top - (closure->function->arity + 1)) = receiver;
+                    *(vm.stack_top - (argc + 1)) = receiver;
                     IncrementRefcountValue(receiver);
                     DecrementRefcountValue(called_value);
                     
@@ -613,6 +744,36 @@ static InterpretResult run() {
                 }
                 
                 break;
+            }
+            case OP_INVOKE: {
+                size_t offset = READ_BYTE();
+                ObjString *property = AS_STRING(READ_CONSTANT(offset));
+                
+                uint8_t argc = READ_BYTE(); 
+                if (!IsInstance(peek(argc))) {
+                    runtimeError("Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjInstance *instance = AS_INSTANCE(peek(argc));
+                
+                Value value;
+                if (Get(&instance->fields, property, &value)) {
+                    *(vm.stack_top - (argc + 1)) = value;
+                    IncrementRefcountValue(value); 
+                    DecrementRefcountObject((Obj*) instance); 
+                    if (!call(argc, &frame, &ip)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                } else if (Get(&instance->class->methods, property, &value)) {
+                    if (!methodCall(argc, AS_CLOSURE(value), &frame, &ip)) {
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                } else {
+                    runtimeError("Instance doesn't have property.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break; 
             }
             case OP_CLOSURE: {
                 size_t offset = READ_BYTE();
@@ -753,17 +914,10 @@ static InterpretResult run() {
     }
 
 #undef EXEC_NUM_BIN_OP
-#undef AS_BOUND_METHOD
-#undef AS_INSTANCE
-#undef AS_CLASS
-#undef AS_NATIVE
-#undef AS_FUNCTION
-#undef AS_STRING
 #undef READ_SHORT
 #undef READ_BYTE
 #undef READ_CONSTANT
 }
-
 InterpretResult Interpret(const char *source) {
     ObjFunction *script = Compile(source);
     if (script == NULL) {
@@ -786,3 +940,10 @@ InterpretResult Interpret(const char *source) {
     
     return result;
 }
+
+#undef AS_BOUND_METHOD
+#undef AS_INSTANCE
+#undef AS_CLASS
+#undef AS_NATIVE
+#undef AS_FUNCTION
+#undef AS_STRING

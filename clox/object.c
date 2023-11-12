@@ -294,7 +294,7 @@ void FreeObj(Obj *obj) {
             break;
         }
         default:
-            printf("Freeing object at %p of invalid object type\n", (void*) obj);
+            printf("Freeing object at %p of invalid object type %d\n", (void*) obj, obj->type);
             exit(1);
     }
 }

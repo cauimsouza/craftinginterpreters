@@ -46,6 +46,7 @@ typedef struct {
 } ParseRule;
 
 typedef enum {
+  TYPE_INIT,
   TYPE_FUNCTION,
   TYPE_METHOD,
   TYPE_SCRIPT
@@ -170,10 +171,19 @@ static void freeCompiler(Compiler *compiler) {
 
 static void nil(bool can_assign);
 static void emitByte(uint8_t byte);
+
+static void emitReturn() {
+  if (current->type == TYPE_INIT) {
+    emitByte(OP_IDENT_LOCAL);
+    emitByte(0);
+  } else {
+    nil(/*can_assign=*/false);
+  }
+  emitByte(OP_RETURN);
+}
   
 static ObjFunction *endCompiler() {
-  nil(/*can_assign=*/false);
-  emitByte(OP_RETURN);
+  emitReturn();
   
   ObjFunction *function = current->function;
   
@@ -431,6 +441,14 @@ static void emitClosure(ObjFunction *function, Upvalue *upvalues) {
     emitByte(upvalues[i].is_local ? 1 : 0);
     emitByte(upvalues[i].index);
   }
+}
+
+static void emitInvoke(Obj *attribute, uint8_t argc) {
+  Value attr_val = FromObj(attribute);
+  Push(attr_val);
+  WriteConstant(currentChunk(), OP_INVOKE, OP_INVOKE_LONG, attr_val, parser.previous.line);
+  WriteChunk(currentChunk(), argc, parser.previous.line);
+  Pop();
 }
 
 static void emitBoolean(bool boolean) {
@@ -732,7 +750,11 @@ static void or(bool can_assign) {
   patchJump(true_jump, ip());
 }
 
-static void call(bool can_assign) {
+// Reads a list of args.
+// Returns the number of args read.
+// Assumes the latest token read by the scanner is a left parenthesis. It stops
+// immediately after the first right parenthesis.
+static uint8_t args() {
   uint8_t argc = 0;
   if (!check(TOKEN_RIGHT_PAREN)) {
     do {
@@ -745,6 +767,11 @@ static void call(bool can_assign) {
   }
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
   
+  return argc; 
+}
+
+static void call(bool can_assign) {
+  uint8_t argc = args(); 
   emitByte(OP_CALL); 
   emitByte(argc);
 }
@@ -752,12 +779,21 @@ static void call(bool can_assign) {
 static void property(bool can_assign) {
   consume(TOKEN_IDENTIFIER, "Expect identifier after property accessor ('.').") ;
   Obj *name = FromString(parser.previous.start, parser.previous.length);
-  emitConstant(FromObj(name)); 
   
   if (can_assign && match(TOKEN_EQUAL)) {
+    emitConstant(FromObj(name)); 
     parsePrecedence(PREC_ASSIGNMENT);
     emitByte(OP_ASSIGN_PROPERTY);
+  } else if (match(TOKEN_LEFT_PAREN)) {
+    // Because args() might trigger the GC, we put the name onto the stack before calling it.
+    Push(FromObj((Obj*) name));
+    
+    uint8_t argc = args(); 
+    emitInvoke(name, argc);
+  
+    Pop(); // name
   } else {
+    emitConstant(FromObj(name)); 
     emitByte(OP_IDENT_PROPERTY);
   }
 }
@@ -1225,10 +1261,15 @@ static void method() {
   Obj *method_name = FromString(parser.previous.start, parser.previous.length);
   emitConstant(FromObj(method_name));
   
+  FunctionType type = TYPE_METHOD;
+  if (strcmp(((ObjString*) method_name)->chars, "init") == 0) {
+    type = TYPE_INIT;
+  }
+  
   // TODO: This has a lot to do with the code in declareFunction().
   // Put the common logic in a dedicated function.
   Compiler compiler;
-  initCompiler(&compiler, TYPE_METHOD);
+  initCompiler(&compiler, type);
   compiler.function->name = (ObjString*) method_name; IncrementRefcountObject(method_name);
   beginScope();
   
@@ -1324,14 +1365,16 @@ static void returnStatement() {
   }
   
   if (match(TOKEN_SEMICOLON)) {
-    nil(/*can_assign=*/ false);
+    emitReturn();
+  } else {
+    if (current->type == TYPE_INIT) {
+      error("Can't return value from initialiser.");
+    }
+    
+    expression();
+    consume(TOKEN_SEMICOLON, "Expect ';' after return expression.");
     emitByte(OP_RETURN);
-    return;
   }
-  
-  expression();
-  consume(TOKEN_SEMICOLON, "Expect ';' after return expression.");
-  emitByte(OP_RETURN);
 }
 
 static void statement() {
