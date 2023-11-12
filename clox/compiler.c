@@ -47,6 +47,7 @@ typedef struct {
 
 typedef enum {
   TYPE_FUNCTION,
+  TYPE_METHOD,
   TYPE_SCRIPT
 } FunctionType;
 
@@ -113,8 +114,13 @@ typedef struct Compiler {
   int scope_depth;
 } Compiler;
 
+typedef struct ClassCompiler {
+  struct ClassCompiler *enclosing;
+} ClassCompiler;
+
 Parser parser;
 Compiler *current = NULL;
+ClassCompiler *current_class = NULL;
 Global *Globals = NULL;
 int Global_count = 0;
 int Global_capacity = 0;
@@ -148,8 +154,13 @@ static void initCompiler(Compiler *compiler, FunctionType type) {
   Local *local = newLocal(current);
   local->is_captured = false;
   local->depth = 0;
-  local->name.start = "";
-  local->name.length = 0;
+  if (type == TYPE_FUNCTION) {
+    local->name.start = "";
+    local->name.length = 0;
+  } else {
+    local->name.start = "this";
+    local->name.length = 4;
+  }
 }
 
 static void freeCompiler(Compiler *compiler) {
@@ -751,6 +762,15 @@ static void property(bool can_assign) {
   }
 }
 
+static void this(bool can_assign) {
+  if (current_class == NULL) {
+    error("Can't use 'this' outside a class.");
+    return;
+  }
+  
+  identifier(false);
+}
+
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -785,7 +805,7 @@ ParseRule rules[] = {
   [TOKEN_OR]            = {NULL,     or,     PREC_OR},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_THIS]          = {this,     NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {boolean,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
@@ -1200,10 +1220,54 @@ static void functionDeclaration() {
   Pop(); // name_obj
 }
 
+static void method() {
+  consume(TOKEN_IDENTIFIER, "Expect method name."); 
+  Obj *method_name = FromString(parser.previous.start, parser.previous.length);
+  emitConstant(FromObj(method_name));
+  
+  // TODO: This has a lot to do with the code in declareFunction().
+  // Put the common logic in a dedicated function.
+  Compiler compiler;
+  initCompiler(&compiler, TYPE_METHOD);
+  compiler.function->name = (ObjString*) method_name; IncrementRefcountObject(method_name);
+  beginScope();
+  
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after method name.");
+  
+  // Parse parameters
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      current->function->arity++;
+      if (current->function->arity > 255) {
+        errorAtCurrent("Can't have more than 255 parameters.");
+      }
+      
+      consume(TOKEN_IDENTIFIER, "Expect parameter name.");
+      Token par = parser.previous;
+      if (!declareLocal(current, par, /*is_const=*/ false)) {
+          error("Already a parameter with this name in parameter list."); 
+      }
+      current->locals[current->local_count - 1].depth = current->scope_depth;
+    } while (match(TOKEN_COMMA)); 
+  }
+  
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters list.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after ')'.");
+  block();
+  
+  ObjFunction *function = endCompiler();
+  emitClosure(function, compiler.upvalues);
+  // initCompiler() initialises the function's refcount to 1, but now the innermost
+  // function declaring the class being compiled references it.
+  DecrementRefcountObject((Obj*) function);
+  
+  emitByte(OP_METHOD);
+}
+
 static void classDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect identifier after 'class'.");
   Token name_token = parser.previous; 
-  Obj *name_obj = FromString(name_token.start, name_token.length); Push(FromObj((Obj*) name_obj));
+  Obj *name_obj = FromString(name_token.start, name_token.length); Push(FromObj(name_obj));
   
   // Declare the class before defining it because the class' body might refer to itself.
   bool is_global = false;
@@ -1221,10 +1285,6 @@ static void classDeclaration() {
     emitConstant(FromObj(name_obj)); 
   }
   
-  consume(TOKEN_LEFT_BRACE, "Expect '{' after class name.");
-  // TODO: Complete
-  consume(TOKEN_RIGHT_BRACE, "Expect '}' at the end of class declaration.");
-  
   ObjClass *class = NewClass((ObjString*) name_obj);
   emitConstant(FromObj((Obj*) class));
   if (is_global) {
@@ -1232,6 +1292,30 @@ static void classDeclaration() {
   }
   
   Pop(); // name_obj
+  
+  ClassCompiler class_compiler;
+  class_compiler.enclosing = current_class;
+  current_class = &class_compiler;
+  
+  // Put the class name back at the stack to attach methods to the class.
+  if (is_global) {
+    emitConstant(FromObj(name_obj));
+    emitByte(OP_IDENT_GLOBAL);
+  } else {
+    identifierLocal(current, /*can_assign=*/false, findLocal(current, name_token));
+  }
+  
+  consume(TOKEN_LEFT_BRACE, "Expect '{' after class name.");
+  
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    method(); 
+  }
+  
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+  
+  emitByte(OP_POP); // The class name
+  
+  current_class = current_class->enclosing;
 }
 
 static void returnStatement() {

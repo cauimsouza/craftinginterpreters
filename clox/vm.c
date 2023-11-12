@@ -325,6 +325,7 @@ static InterpretResult run() {
 #define AS_NATIVE(value) ((ObjNative*) (value).as.obj)
 #define AS_CLASS(value) ((ObjClass*) (value).as.obj)
 #define AS_INSTANCE(value) ((ObjInstance*) (value).as.obj)
+#define AS_BOUND_METHOD(value) ((ObjBoundMethod*) (value).as.obj)
 #define EXEC_NUM_BIN_OP(op, toValue) \
     do { \
         Value right = peek(0); \
@@ -530,9 +531,10 @@ static InterpretResult run() {
                 Value called_value = peek(argc);
                 if (!IsNative(called_value) &&
                     !IsClass(called_value) &&
-                    !IsClosure(called_value)
+                    !IsClosure(called_value) &&
+                    !IsBoundMethod(called_value)
                    ) {
-                    runtimeError("Can only call functions and constructors.");
+                    runtimeError("Can only call functions, methods, and constructors.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 
@@ -553,11 +555,7 @@ static InterpretResult run() {
                         Pop();
                     }
                     Push(result.value);
-                    
-                    break;
-                }
-                
-                if (IsClass(called_value)) {
+                } else if (IsClass(called_value)) {
                     if (argc != 0) {
                         runtimeError("Constructor with arguments not supported.");
                         return INTERPRET_RUNTIME_ERROR;
@@ -568,28 +566,51 @@ static InterpretResult run() {
                         Pop();
                     }
                     Push(FromObj((Obj*) instance));
+                } else if (IsClosure(called_value)) {
+                    ObjClosure *closure = AS_CLOSURE(called_value);
+                    if (argc != closure->function->arity) {
+                        runtimeError("Invalid number of arguments."); 
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                     
-                    break;
+                    if (vm.frame_count == FRAMES_MAX) {
+                        runtimeError("Stack overflow.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    frame->ip = ip;
+                    
+                    frame = &vm.frames[vm.frame_count++];
+                    frame->closure = closure;
+                    frame->ip = closure->function->chunk.code;
+                    frame->slots = vm.stack_top - argc - 1;
+                    ip = frame->ip;
+                } else { // bound method
+                    ObjBoundMethod *method = AS_BOUND_METHOD(called_value);    
+                    Value receiver = method->receiver;
+                    ObjClosure *closure = method->method;
+                    if (argc != closure->function->arity) {
+                        runtimeError("Invalid number of arguments");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    if (vm.frame_count == FRAMES_MAX) {
+                        runtimeError("Stack overflow.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                    
+                    *(vm.stack_top - (closure->function->arity + 1)) = receiver;
+                    IncrementRefcountValue(receiver);
+                    DecrementRefcountValue(called_value);
+                    
+                    frame->ip = ip;
+                    
+                    frame = &vm.frames[vm.frame_count++];
+                    frame->closure = closure;
+                    frame->ip = closure->function->chunk.code;
+                    frame->slots = vm.stack_top - argc - 1;
+                    ip = frame->ip;
                 }
-                
-                ObjClosure *closure = AS_CLOSURE(called_value);
-                if (argc != closure->function->arity) {
-                    runtimeError("Invalid number of arguments."); 
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                
-                if (vm.frame_count == FRAMES_MAX) {
-                    runtimeError("Stack overflow.");
-                    return INTERPRET_RUNTIME_ERROR;
-                }
-                
-                frame->ip = ip;
-                
-                frame = &vm.frames[vm.frame_count++];
-                frame->closure = closure;
-                frame->ip = closure->function->chunk.code;
-                frame->slots = vm.stack_top - argc - 1;
-                ip = frame->ip;
                 
                 break;
             }
@@ -642,15 +663,37 @@ static InterpretResult run() {
                 ObjString *field = AS_STRING(peek(0));
                 
                 Value value;
-                if (!Get(&instance->fields, field, &value)) {
-                    runtimeError("Instance does not have field.");
+                if (Get(&instance->fields, field, &value)) {
+                    // When we pop the instance from the stack, the instance
+                    // refcount might drop to 0. If that happens, the field we are
+                    // accessing could be collected. To prevent that, we increment
+                    // the field's refcount first.
+                    IncrementRefcountValue(value);
+                    
+                    Pop(); // field
+                    Pop(); // instance
+                    Push(value);
+                    
+                    // Now that it's in the stack, we can decrement the refcount.
+                    DecrementRefcountValue(value);
+                } else if (Get(&instance->class->methods, field, &value)) {
+                    Value receiver = FromObj((Obj*) instance);
+                    ObjClosure *method = AS_CLOSURE(value);
+                    ObjBoundMethod *bound_method = NewBoundMethod(receiver, method);
+                    value = FromObj((Obj*) bound_method);
+                    
+                    // Since NewBoundMethod() adds to the instance refcount, the
+                    // instance refcount won't drop to 0 when we pop instance
+                    // from the stack. So the GC won't be triggered and there is
+                    // no risk of bound_method being collected before we push it
+                    // onto the stack.
+                    Pop(); // field
+                    Pop(); // instance
+                    Push(value);
+                } else {
+                    runtimeError("Instance does not have field or method.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                
-                IncrementRefcountValue(value);
-                Pop(); // field
-                Pop(); // instance
-                Push(value);
                 
                 break;
             }
@@ -672,6 +715,18 @@ static InterpretResult run() {
                 Push(value); DecrementRefcountValue(value);
                 
                 break;
+            }
+            case OP_METHOD: {
+                Value closure = peek(0);
+                ObjString *name = AS_STRING(peek(1));
+                ObjClass *class = AS_CLASS(peek(2));
+                
+                Insert(&class->methods, name, closure);
+                
+                Pop(); // closure
+                Pop(); // name
+                
+                break; 
             }
             case OP_RETURN: {
                 Value v = peek(0); IncrementRefcountValue(v); Pop();
@@ -698,6 +753,7 @@ static InterpretResult run() {
     }
 
 #undef EXEC_NUM_BIN_OP
+#undef AS_BOUND_METHOD
 #undef AS_INSTANCE
 #undef AS_CLASS
 #undef AS_NATIVE

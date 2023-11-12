@@ -187,12 +187,19 @@ static void blackify(Obj *obj) {
         case OBJ_CLASS: {
             ObjClass *class = (ObjClass*) obj;
             MarkObj((Obj*) class->name);
+            MarkTable(&class->methods);
             break;
         }
         case OBJ_INSTANCE: {
             ObjInstance *instance = (ObjInstance*) obj;
             MarkObj((Obj*) instance->class);
             MarkTable(&instance->fields);
+            break;
+        }
+        case OBJ_BOUND_METHOD: {
+            ObjBoundMethod *bound_method = (ObjBoundMethod*) obj; 
+            MarkValue(bound_method->receiver);
+            MarkObj((Obj*) bound_method->method);
             break;
         }
         default:

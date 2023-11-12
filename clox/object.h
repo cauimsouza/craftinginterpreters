@@ -16,6 +16,7 @@ typedef enum {
     OBJ_UPVALUE,
     OBJ_CLASS,
     OBJ_INSTANCE,
+    OBJ_BOUND_METHOD,
 } ObjType;
 
 struct Obj {
@@ -84,6 +85,7 @@ static inline bool IsNative(Value value);
 typedef struct {
     Obj obj;
     ObjString *name;
+    Table methods;
 } ObjClass;
 
 ObjClass *NewClass(ObjString *name);
@@ -97,6 +99,15 @@ typedef struct {
 
 ObjInstance *NewInstance(ObjClass *class);
 static inline bool IsInstance(Value value);
+
+typedef struct {
+    Obj obj;
+    Value receiver;
+    ObjClosure *method;
+} ObjBoundMethod;
+
+ObjBoundMethod *NewBoundMethod(Value receiver, ObjClosure *method);
+static inline bool IsBoundMethod(Value value);
 
 bool ObjsEqual(const Obj *a, const Obj *b);
 void FreeObj(Obj *obj);
@@ -125,6 +136,10 @@ static inline bool IsClass(Value value) {
 
 static inline bool IsInstance(Value value) {
     return value.type == VAL_OBJ && value.as.obj->type == OBJ_INSTANCE;
+}
+
+static inline bool IsBoundMethod(Value value) {
+    return value.type == VAL_OBJ && value.as.obj->type == OBJ_BOUND_METHOD;
 }
 
 #endif

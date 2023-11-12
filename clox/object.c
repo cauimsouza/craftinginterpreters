@@ -168,6 +168,7 @@ ObjNative *NewNative(NativeFn function, int arity) {
 ObjClass *NewClass(ObjString *name) {
     ObjClass *class = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
     class->name = name; IncrementRefcountObject((Obj*) name);
+    InitTable(&class->methods);
     
     return class;
 }
@@ -178,6 +179,14 @@ ObjInstance *NewInstance(ObjClass *class) {
     InitTable(&instance->fields);
     
     return instance;
+}
+
+ObjBoundMethod *NewBoundMethod(Value receiver, ObjClosure *method) {
+    ObjBoundMethod *bound_method = ALLOCATE_OBJ(ObjBoundMethod, OBJ_BOUND_METHOD);
+    bound_method->receiver = receiver; IncrementRefcountValue(receiver);
+    bound_method->method = method; IncrementRefcountObject((Obj*) method);
+    
+    return bound_method;
 }
 
 bool ObjsEqual(const Obj *a, const Obj *b) {
@@ -266,6 +275,7 @@ void FreeObj(Obj *obj) {
         case OBJ_CLASS: {
             ObjClass *class = (ObjClass*) obj;
             DecrementRefcountObject((Obj*) class->name);
+            FreeTable(&class->methods);
             FREE(ObjClass, obj);
             break;
         }
@@ -274,6 +284,13 @@ void FreeObj(Obj *obj) {
             DecrementRefcountObject((Obj*) instance->class);
             FreeTable(&instance->fields);
             FREE(ObjInstance, obj);
+            break;
+        }
+        case OBJ_BOUND_METHOD: {
+            ObjBoundMethod *bound_method = (ObjBoundMethod*) obj;
+            DecrementRefcountValue(bound_method->receiver);
+            DecrementRefcountObject((Obj*) bound_method->method);
+            FREE(ObjBoundMethod, obj);
             break;
         }
         default:
@@ -294,14 +311,18 @@ void FPrintObj(FILE *stream, const Obj *obj) {
             break;
         }
         case OBJ_FUNCTION:
-        case OBJ_CLOSURE: {
+        case OBJ_CLOSURE:
+        case OBJ_BOUND_METHOD: {
             ObjFunction *function;
             if (obj->type == OBJ_FUNCTION) {
                 function = (ObjFunction*) obj;
                 fprintf(stream, "<fn ");
-            } else {
+            } else if (obj->type == OBJ_CLOSURE) {
                 function = ((ObjClosure*) obj)->function;
                 fprintf(stream, "<closure ");
+            } else {
+                function = ((ObjBoundMethod*) obj)->method->function;
+                fprintf(stream, "<method ");
             }
             
             if (function->name == NULL) {
