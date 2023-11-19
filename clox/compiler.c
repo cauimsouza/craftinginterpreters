@@ -1194,83 +1194,10 @@ static void breakStatement() {
   scheduleBreakJump(loop, instr);
 }
 
-static void functionDeclaration() {
-  consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
-  Token name_token = parser.previous; 
-  Obj *name_obj = FromString(name_token.start, name_token.length); Push(FromObj(name_obj));
-  
-  // Declare the function before defining it because the function might be recursive.
-  bool is_global = false;
-  if (current->scope_depth > 0) {
-    // Function declared inside a block or inside the body of another function
-    if (!declareLocal(current, name_token, /*is_const=*/ false)) {
-        error("Already an identifier with this name in this scope."); 
-    }
-    current->locals[current->local_count - 1].depth = current->scope_depth;
-  } else {
-    // Function declared in the global scope
-    is_global = true;
-    Global *global = getGlobal(name_obj);
-    global->is_const = false;
-    emitConstant(FromObj(name_obj)); 
-  }
-  
-  Compiler compiler;
-  initCompiler(&compiler, TYPE_FUNCTION);
-  compiler.function->name = (ObjString*) name_obj; IncrementRefcountObject((Obj*) name_obj);
-  beginScope();
-  
-  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
-  
-  // Parse parameters
-  if (!check(TOKEN_RIGHT_PAREN)) {
-    do {
-      current->function->arity++;
-      if (current->function->arity > 255) {
-        errorAtCurrent("Can't have more than 255 parameters.");
-      }
-      
-      consume(TOKEN_IDENTIFIER, "Expect parameter name.");
-      Token par = parser.previous;
-      if (!declareLocal(current, par, /*is_const=*/ false)) {
-          error("Already a parameter with this name in parameter list."); 
-      }
-      current->locals[current->local_count - 1].depth = current->scope_depth;
-    } while (match(TOKEN_COMMA)); 
-  }
-  
-  consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters list.");
-  consume(TOKEN_LEFT_BRACE, "Expect '{' after ')'.");
-  block();
-  
-  ObjFunction *function = endCompiler();
-  emitClosure(function, compiler.upvalues);
-  if (is_global) {
-    emitByte(OP_VAR_DECL); 
-  }
-  
-  // initCompiler() initialises the function's refcount to 1, but now the chunk
-  // of the outer function being compiled references it.
-  DecrementRefcountObject((Obj*) function);
-  
-  Pop(); // name_obj
-}
-
-static void method() {
-  consume(TOKEN_IDENTIFIER, "Expect method name."); 
-  Obj *method_name = FromString(parser.previous.start, parser.previous.length);
-  emitConstant(FromObj(method_name));
-  
-  FunctionType type = TYPE_METHOD;
-  if (strcmp(((ObjString*) method_name)->chars, "init") == 0) {
-    type = TYPE_INIT;
-  }
-  
-  // TODO: This has a lot to do with the code in declareFunction().
-  // Put the common logic in a dedicated function.
+static void compileFunction(ObjString *name, FunctionType type) {
   Compiler compiler;
   initCompiler(&compiler, type);
-  compiler.function->name = (ObjString*) method_name; IncrementRefcountObject(method_name);
+  compiler.function->name = name; IncrementRefcountObject((Obj*) name);
   beginScope();
   
   consume(TOKEN_LEFT_PAREN, "Expect '(' after method name.");
@@ -1298,9 +1225,53 @@ static void method() {
   
   ObjFunction *function = endCompiler();
   emitClosure(function, compiler.upvalues);
+  
   // initCompiler() initialises the function's refcount to 1, but now the innermost
   // function declaring the class being compiled references it.
   DecrementRefcountObject((Obj*) function);
+}
+
+static void functionDeclaration() {
+  consume(TOKEN_IDENTIFIER, "Expect identifier after 'fun'.");
+  Token name_token = parser.previous; 
+  Obj *name_obj = FromString(name_token.start, name_token.length); Push(FromObj(name_obj));
+  
+  // Declare the function before defining it because the function might be recursive.
+  bool is_global = false;
+  if (current->scope_depth > 0) {
+    // Function declared inside a block or inside the body of another function
+    if (!declareLocal(current, name_token, /*is_const=*/ false)) {
+        error("Already an identifier with this name in this scope."); 
+    }
+    current->locals[current->local_count - 1].depth = current->scope_depth;
+  } else {
+    // Function declared in the global scope
+    is_global = true;
+    Global *global = getGlobal(name_obj);
+    global->is_const = false;
+    emitConstant(FromObj(name_obj)); 
+  }
+  
+  compileFunction((ObjString*) name_obj, TYPE_FUNCTION);
+  
+  if (is_global) {
+    emitByte(OP_VAR_DECL); 
+  }
+  
+  Pop(); // name_obj
+}
+
+static void methodDeclaration() {
+  consume(TOKEN_IDENTIFIER, "Expect method name."); 
+  Obj *method_name = FromString(parser.previous.start, parser.previous.length);
+  emitConstant(FromObj(method_name));
+  
+  FunctionType type = TYPE_METHOD;
+  if (strcmp(((ObjString*) method_name)->chars, "init") == 0) {
+    type = TYPE_INIT;
+  }
+  
+  compileFunction((ObjString*) method_name, type);
   
   emitByte(OP_METHOD);
 }
@@ -1349,7 +1320,7 @@ static void classDeclaration() {
   consume(TOKEN_LEFT_BRACE, "Expect '{' after class name.");
   
   while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
-    method(); 
+    methodDeclaration(); 
   }
   
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
