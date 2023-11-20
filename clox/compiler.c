@@ -117,6 +117,7 @@ typedef struct Compiler {
 
 typedef struct ClassCompiler {
   struct ClassCompiler *enclosing;
+  bool hasSuperclass;
 } ClassCompiler;
 
 Parser parser;
@@ -626,20 +627,20 @@ static void identifierUpvalue(Compiler *compiler, bool can_assign, int upvalue) 
   emitByte(upvalue);
 }
 
-static void identifier(bool can_assign) {
-  int local = findLocal(current, parser.previous);
+static void identifierToken(bool can_assign, Token token) {
+  int local = findLocal(current, token);
   if (local >= 0) {
     identifierLocal(current, can_assign, local);
     return;
   }
   
-  int upvalue = resolveUpvalue(current, parser.previous);
+  int upvalue = resolveUpvalue(current, token);
   if (upvalue >= 0) {
     identifierUpvalue(current, can_assign, upvalue);
     return;
   }
   
-  Obj *name = FromString(parser.previous.start, parser.previous.length);
+  Obj *name = FromString(token.start, token.length);
   emitConstant(FromObj(name)); 
   
   if (can_assign && match(TOKEN_EQUAL)) {
@@ -656,6 +657,11 @@ static void identifier(bool can_assign) {
   }
   
   emitByte(OP_IDENT_GLOBAL);
+  
+}
+
+static void identifier(bool can_assign) {
+  identifierToken(can_assign, parser.previous);
 }
 
 static void grouping(bool can_assign) {
@@ -807,6 +813,32 @@ static void this(bool can_assign) {
   identifier(false);
 }
 
+static Token syntheticToken(const char *text) {
+  Token token;
+  token.start = text;
+  token.length = (int) strlen(text);
+  
+  return token;
+}
+
+static void super(bool can_assign) {
+  if (current_class == NULL) {
+    error("Can't use 'super' outside of a class.");   
+  } else if (!current_class->hasSuperclass) {
+    error("Can't use 'super' in a class with no superclass.");
+  }
+  
+  consume(TOKEN_DOT, "Expect '.' after 'super'."); 
+  consume(TOKEN_IDENTIFIER, "Expect superclass method name."); 
+  
+  Obj *name = FromString(parser.previous.start, parser.previous.length);
+  emitConstant(FromObj(name)); 
+  
+  identifierToken(/*can_assign=*/ false, syntheticToken("this"));
+  identifierToken(/*can_assign=*/ false, syntheticToken("super"));
+  emitByte(OP_GET_SUPER);
+}
+
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -840,7 +872,7 @@ ParseRule rules[] = {
   [TOKEN_NIL]           = {nil,      NULL,   PREC_NONE},
   [TOKEN_OR]            = {NULL,     or,     PREC_OR},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SUPER]         = {super,    NULL,   PREC_NONE},
   [TOKEN_THIS]          = {this,     NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {boolean,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
@@ -1307,7 +1339,33 @@ static void classDeclaration() {
   
   ClassCompiler class_compiler;
   class_compiler.enclosing = current_class;
+  class_compiler.hasSuperclass = false;
   current_class = &class_compiler;
+  
+  // Support to inheritance: class A < B { ... }
+  if (match(TOKEN_LESS)) {
+    consume(TOKEN_IDENTIFIER, "Expect superclass name.");
+    
+    if (sameVariable(name_token, parser.previous)) {
+      error("A class can't inherit from itself.");
+    }
+    
+    identifier(false);
+    
+    beginScope();
+    declareLocal(current, syntheticToken("super"), /*is_const=*/ true);
+    current->locals[current->local_count - 1].depth = current->scope_depth;
+    current_class->hasSuperclass = true;
+    
+    if (is_global) {
+      emitConstant(FromObj(name_obj));
+      emitByte(OP_IDENT_GLOBAL);
+    } else {
+      identifierLocal(current, /*can_assign=*/false, findLocal(current, name_token));
+    }
+    
+    emitByte(OP_INHERIT);
+  }
   
   // Put the class name back at the stack to attach methods to the class.
   if (is_global) {
@@ -1326,6 +1384,10 @@ static void classDeclaration() {
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
   
   emitByte(OP_POP); // The class name
+  
+  if (class_compiler.hasSuperclass) {
+    endScope();
+  }
   
   current_class = current_class->enclosing;
 }

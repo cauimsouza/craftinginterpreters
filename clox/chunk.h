@@ -46,6 +46,8 @@ typedef enum {
   OP_CLOSURE,
   OP_CLOSURE_LONG,
   OP_METHOD,
+  OP_INHERIT,
+  OP_GET_SUPER,
 } OpCode;
 
 typedef struct {

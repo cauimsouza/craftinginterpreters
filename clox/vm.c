@@ -814,6 +814,43 @@ static InterpretResult run() {
                 
                 break; 
             }
+            case OP_INHERIT: {
+                Value value = peek(1);
+                if (!IsClass(value)) {
+                    runtimeError("Superclass must be a class.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjClass *super = AS_CLASS(value);
+                ObjClass *sub = AS_CLASS(peek(0));
+                
+                CopyTable(&super->methods, &sub->methods);
+                
+                Pop(); // sub
+                
+                break;
+            }
+            case OP_GET_SUPER: {
+                ObjString *name = AS_STRING(peek(2));
+                ObjClass *superclass = AS_CLASS(peek(0));
+                
+                Value method;
+                if (!Get(&superclass->methods, name, &method)) {
+                    runtimeError("Undefined property.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                
+                ObjBoundMethod *bound_method = NewBoundMethod(peek(1), AS_CLOSURE(method));
+                IncrementRefcountObject((Obj*) bound_method);
+                
+                Pop(); // superclass
+                Pop(); // instance
+                Pop(); // name
+                PUSH_OBJ(bound_method);
+                DecrementRefcountObject((Obj*) bound_method);
+                
+                break;
+            }
             case OP_RETURN: {
                 Value v = peek(0); IncrementRefcountValue(v); Pop();
                 closeUpvalues(frame->slots);

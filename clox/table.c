@@ -153,6 +153,17 @@ void Remove(Table *table, ObjString *key) {
     DecrementRefcountValue(v);
 }
 
+void CopyTable(Table *src, Table *dst) {
+    for (size_t i = 0; i < src->capacity; i++) {
+        Entry *entry = &src->entries[i];
+        if (entry->key == NULL) {
+            continue;
+        }
+        
+        Insert(dst, entry->key, entry->value);
+    }
+}
+
 ObjString *Intern(Table *table, ObjString *key) {
     if (table->capacity == 0) {
         return NULL;

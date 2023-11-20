@@ -167,6 +167,10 @@ int DisassembleInstruction(Chunk *chunk, int offset) {
             return simpleInstruction("OP_METHOD", offset);
         case OP_RETURN:
             return simpleInstruction("OP_RETURN", offset);
+        case OP_INHERIT:
+            return simpleInstruction("OP_INHERIT", offset);
+        case OP_GET_SUPER:
+            return simpleInstruction("OP_GET_SUPER", offset);
         default:
             printf("Unknown opcode %d\n", instruction);
             return offset + 1;
