@@ -11,7 +11,7 @@ typedef struct {
 
 typedef struct {
   size_t count;
-  size_t capacity;
+  size_t capacity; // Always a power of 2
   Entry* entries;
 } Table;
 

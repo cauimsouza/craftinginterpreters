@@ -16,7 +16,7 @@ inline static bool isTombstone(Entry *entry) {
 //  Assumes the table is not full and is non-empty.
 static Entry *probe(Table *table, ObjString *key) {
     Entry *tombstone = NULL;
-    size_t i = key->hash % table->capacity;
+    size_t i = key->hash & (table->capacity - 1);
     for (;;) {
         Entry *entry = &table->entries[i];
         if (entry->key == NULL) {
@@ -30,7 +30,7 @@ static Entry *probe(Table *table, ObjString *key) {
             return entry;
         }
         
-        i = (i + 1) % table->capacity;
+        i = (i + 1) & (table->capacity - 1);
     }
 }
 
@@ -169,7 +169,7 @@ ObjString *Intern(Table *table, ObjString *key) {
         return NULL;
     }
     
-    size_t i = key->hash % table->capacity;    
+    size_t i = key->hash & (table->capacity - 1);    
     for (;;) {
         Entry *entry = &table->entries[i];
         if (entry->key == NULL && !isTombstone(entry)) {
@@ -181,7 +181,7 @@ ObjString *Intern(Table *table, ObjString *key) {
             memcmp(entry->key->chars, key->chars, key->length) == 0) {
             return entry->key; 
         }
-        i = (i + 1) % table->capacity;
+        i = (i + 1) & (table->capacity - 1);
     }
 }
 
