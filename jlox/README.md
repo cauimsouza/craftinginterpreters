@@ -1,7 +1,7 @@
 To compile jlox, run:
 
 ```
-javac Lox.java
+make
 ```
 
 Then, to run your Lox script with jlox, run:
