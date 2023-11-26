@@ -1,7 +1,6 @@
-fun main(name) {
-var a = "This
-is 
-a multiline
-comment
-    return a
+fun foo(name) {
+	print("Hello, " + name);
 }
+
+foo("cauim");
+
